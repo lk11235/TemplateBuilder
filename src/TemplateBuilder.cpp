@@ -427,24 +427,30 @@ void TemplateBuilder::postProcessing(Template::Origin origin)
         // normalize
         if(origin==Template::Origin::FILES)
         {
-            double targetSumOfWeights = 1.;
-            if(tmp->conserveSumOfWeights())
+            double targetSumOfWeights = 1., normalizeScaleFactor = 1.;
+            double sumOfWeights = tmp->getTemplate()->GetSumOfWeights();
+            if (sumOfWeights == 0)
+            {
+                cout << "[WARN] Template '" << tmp->getName() << "' is empty, nothing to normalize\n";
+            }
+            else if(tmp->conserveSumOfWeights())
             {
                 targetSumOfWeights = tmp->originalSumOfWeights();
+                normalizeScaleFactor = targetSumOfWeights / sumOfWeights;
                 cout<<"[INFO] Normalizing template '"<<tmp->getName()<<"' to the original sum of weights = "<<targetSumOfWeights<<"\n";
             }
             else
             {
+                normalizeScaleFactor = targetSumOfWeights / sumOfWeights;
                 cout<<"[INFO] Normalizing template '"<<tmp->getName()<<"' to 1\n";
             }
-            double sumOfWeights = tmp->getTemplate()->GetSumOfWeights();
-            tmp->getTemplate()->Scale(targetSumOfWeights/sumOfWeights);
+            tmp->getTemplate()->Scale(normalizeScaleFactor);
             sumOfWeights = tmp->getRawTemplate()->GetSumOfWeights();
-            tmp->getRawTemplate()->Scale(targetSumOfWeights/sumOfWeights);
+            tmp->getRawTemplate()->Scale(normalizeScaleFactor);
             for(unsigned int axis=0;axis<tmp->numberOfDimensions();axis++)
             {
                 sumOfWeights = tmp->getRaw1DTemplate(axis)->GetSumOfWeights();
-                tmp->getRaw1DTemplate(axis)->Scale(targetSumOfWeights/sumOfWeights);
+                tmp->getRaw1DTemplate(axis)->Scale(normalizeScaleFactor);
             }
         }
         //double scaleFactor = tmp->getRescaling();
