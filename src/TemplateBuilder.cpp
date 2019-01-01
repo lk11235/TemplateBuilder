@@ -280,6 +280,10 @@ void TemplateBuilder::postProcessing(Template::Origin origin)
                                         double avr = (antiMirror ? histo->GetBinContent(binx+1,biny+1) - histo->GetBinContent(histo->GetNbinsX()-binx,biny+1) : histo->GetBinContent(binx+1,biny+1) + histo->GetBinContent(histo->GetNbinsX()-binx,biny+1));
                                         histo->SetBinContent(binx+1, biny+1, avr/2.);
                                         histo->SetBinContent(histo->GetNbinsX()-binx, biny+1, (antiMirror ? -avr/2. : avr/2.));
+
+                                        double avrerr = sqrt(pow(histo->GetBinError(binx+1, biny+1), 2) + pow(histo->GetBinError(histo->GetNbinsX()-binx, biny+1), 2));
+                                        histo->SetBinError(binx+1, biny+1, avrerr/2.);
+                                        histo->SetBinError(histo->GetNbinsX()-binx, biny+1, avrerr/2.);
                                     } 
                                 }
                             }
@@ -292,6 +296,10 @@ void TemplateBuilder::postProcessing(Template::Origin origin)
                                         double avr = (antiMirror ? histo->GetBinContent(binx+1,biny+1) - histo->GetBinContent(binx+1,histo->GetNbinsY()-biny) : histo->GetBinContent(binx+1,biny+1) + histo->GetBinContent(binx+1,histo->GetNbinsY()-biny));
                                         histo->SetBinContent(binx+1, biny+1, avr/2.);
                                         histo->SetBinContent(binx+1, histo->GetNbinsY()-biny, (antiMirror ? -avr/2. : avr/2.));
+
+                                        double avrerr = sqrt(pow(histo->GetBinError(binx+1, biny+1), 2) + pow(histo->GetBinError(binx+1,histo->GetNbinsY()-biny), 2));
+                                        histo->SetBinError(binx+1, biny+1, avrerr/2.);
+                                        histo->SetBinError(binx+1, histo->GetNbinsY()-biny, avrerr/2.);
                                     } 
                                 }
                             }
@@ -309,7 +317,11 @@ void TemplateBuilder::postProcessing(Template::Origin origin)
                                         {
                                             double avr = (antiMirror ? histo->GetBinContent(binx+1,biny+1,binz+1) - histo->GetBinContent(histo->GetNbinsX()-binx,biny+1,binz+1) : histo->GetBinContent(binx+1,biny+1,binz+1) + histo->GetBinContent(histo->GetNbinsX()-binx,biny+1,binz+1));
                                             histo->SetBinContent(binx+1, biny+1, binz+1, avr/2.);
-                                            histo->SetBinContent(histo->GetNbinsX()-binx, biny+1, biny+1, (antiMirror ? -avr/2. : avr/2.));
+                                            histo->SetBinContent(histo->GetNbinsX()-binx, biny+1, binz+1, (antiMirror ? -avr/2. : avr/2.));
+
+                                            double avrerr = sqrt(pow(histo->GetBinError(binx+1,biny+1,binz+1), 2) + pow(histo->GetBinError(histo->GetNbinsX()-binx,biny+1,binz+1), 2));
+                                            histo->SetBinError(binx+1, biny+1, binz+1, avrerr/2.);
+                                            histo->SetBinError(histo->GetNbinsX()-binx, biny+1, binz+1, avrerr/2.);
                                         }
                                     } 
                                 }
@@ -324,8 +336,12 @@ void TemplateBuilder::postProcessing(Template::Origin origin)
                                         {
 
                                             double avr = (antiMirror ? histo->GetBinContent(binx+1,biny+1,binz+1) - histo->GetBinContent(binx+1,histo->GetNbinsY()-biny,binz+1) : histo->GetBinContent(binx+1,biny+1,binz+1) + histo->GetBinContent(binx+1,histo->GetNbinsY()-biny,binz+1));
-                                            histo->SetBinContent(binx+1, biny+1,binz+1, avr/2.);
-                                            histo->SetBinContent(binx+1, histo->GetNbinsY()-biny,binz+1, (antiMirror ? -avr/2. : avr/2.));
+                                            histo->SetBinContent(binx+1, biny+1, binz+1, avr/2.);
+                                            histo->SetBinContent(binx+1, histo->GetNbinsY()-biny, binz+1, (antiMirror ? -avr/2. : avr/2.));
+
+                                            double avrerr = sqrt(pow(histo->GetBinError(binx+1,biny+1,binz+1), 2) + pow(histo->GetBinError(binx+1,histo->GetNbinsY()-biny,binz+1), 2));
+                                            histo->SetBinError(binx+1, biny+1, binz+1, avrerr/2.);
+                                            histo->SetBinError(binx+1, histo->GetNbinsY()-biny, binz+1, avrerr/2.);
                                         } 
                                     }
                                 }
@@ -339,8 +355,12 @@ void TemplateBuilder::postProcessing(Template::Origin origin)
                                         for (int binz=0;binz<histo->GetNbinsZ()/2; binz++)
                                         {
                                             double avr = (antiMirror ? histo->GetBinContent(binx+1,biny+1,binz+1) - histo->GetBinContent(binx+1,biny+1,histo->GetNbinsZ()-binz) : histo->GetBinContent(binx+1,biny+1,binz+1) + histo->GetBinContent(binx+1,biny+1,histo->GetNbinsZ()-binz));
-                                            histo->SetBinContent(binx+1, biny+1,binz+1, avr/2.);
+                                            histo->SetBinContent(binx+1, biny+1, binz+1, avr/2.);
                                             histo->SetBinContent(binx+1,biny+1, histo->GetNbinsZ()-binz, (antiMirror ? -avr/2. : avr/2.));
+
+                                            double avrerr = sqrt(pow(histo->GetBinError(binx+1,biny+1,binz+1), 2) + pow(histo->GetBinError(binx+1, biny+1, histo->GetNbinsZ()-binz), 2));
+                                            histo->SetBinError(binx+1, biny+1, binz+1, avrerr/2.);
+                                            histo->SetBinError(binx+1, biny+1, histo->GetNbinsZ()-binz, avrerr/2.);
                                         } 
                                     }
                                 }
