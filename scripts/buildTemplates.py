@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from config import JsonReader
+from TemplateBuilder.TemplateBuilder.config import JsonReader
 
 if __name__ == "__main__":
   import argparse
