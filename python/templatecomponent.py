@@ -73,3 +73,7 @@ class TemplateComponent(object):
 
   def lock(self):
     self.__locked = True
+
+  @property
+  def name(self):
+    return self.__name

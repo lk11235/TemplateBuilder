@@ -1,3 +1,5 @@
+from collections import Counter
+
 import uncertainties
 
 from moreuncertainties import weightedaverage
@@ -11,6 +13,7 @@ class Template(object):
     cutformula, weightformula,
     mirrortype, scaleby, floor,
   ):
+    self.__name = name
     self.__templatecomponents = [
       tree.registertemplatecomponent(
         name+"_"+str(i),
@@ -41,6 +44,9 @@ class Template(object):
     self.__scaleby = scaleby
 
     self.__floor = floor
+
+  @property
+  def name(self): return self.name
 
   @property
   def binsxyz(self):
@@ -91,16 +97,28 @@ class Template(object):
 
     flooredbins = []
 
+    outliers = Counter()
+
     for x, y, z in self.binsxyz:
-      bincontent = []
+      bincontent = {}
       for component in self.__templatecomponents:
-        bincontent.append(component.GetBinContentError(x, y, z))
-      finalbincontent = weightedaverage(bincontent) * self.__scaleby
+        bincontent[component.name] = component.GetBinContentError(x, y, z)
+
+      averagebincontent = weightedaverage(bincontent.itervalues())
+      for name, content in bincontent.items():
+        difference = content - weightedaverage
+        if abs(difference.n) / difference.u > 3:
+          outliers[name] += 1
+          del bincontent[name]
+
+      finalbincontent = weightedaverage(bincontent.itervalues()) * self.__scaleby
       if floor is not None and finalbincontent.nominal_value <= 0:
         finalbincontent = floor
         flooredbins.append((x, y, z))
       self.__h.SetBinContent(x, y, z, finalbincontent.nominal_value)
       self.__h.SetBinError(finalbincontent.std_dev)
+
+    if outliers: print self.name + ": the following samples had outliers in some bins: " + ", ".join("{} ({})".format(k, v) for k, v in outliers.iteritems())
 
     if self.__mirrortype is not None: self.__domirror()
     if self.__floor is not None: self.__dofloor()
