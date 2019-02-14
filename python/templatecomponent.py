@@ -1,6 +1,7 @@
 import array
 import collections
 import functools
+import itertools
 import re
 
 import uncertainties
@@ -48,6 +49,10 @@ class TemplateComponent(object):
       zmax - (zmax - zmin) / zbins / 10, 
     )
 
+    self.__xbins = xbins
+    self.__ybins = ybins
+    self.__zbins = zbins
+
     self.__locked = False
 
   @staticmethod
@@ -81,7 +86,26 @@ class TemplateComponent(object):
   def GetBinContentError(self, *args):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
 
+  @property
+  def binsxyz(self):
+    return itertools.product(xrange(1, self.__xbins+1), xrange(1, self.__ybins+1), xrange(1, self.__zbins+1))
+
   def lock(self):
+    if self.__locked: return
+
+    #floor the error
+    maxerrorratio, errortoset = max(
+      (abs(self.__h.GetBinError(x, y, z) / self.__h.GetBinContent(x, y, z)), self.__h.GetBinError(x, y, z))
+        for x, y, z in self.binsxyz
+      if self.__h.GetBinContent(x, y, z) != 0
+    )
+    #the reasoning being that if there's a bin with just one entry 2.3 +/- 2.3, then the zero bin could also have 2.3
+    #but we can't draw that conclusion from a bin 1000 +/- 5.5
+
+    for x, y, z in self.binsxyz:
+      if self.__h.GetBinContent(x, y, z) == 0:
+        self.__h.SetBinError(x, y, z, errortoset)
+
     self.__locked = True
 
   @property

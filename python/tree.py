@@ -18,13 +18,20 @@ class Tree(object):
   def treename(self): return self.__treename
 
   def __enter__(self):
+    import ROOT
+    #https://root-forum.cern.ch/t/how-to-get-a-non-changing-copy-of-gdirectory-in-python/6236/2
+    bkpdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
+
     f = self.__f = RootFile(self.__filename)
     f.__enter__()
     self.__t = getattr(f, self.__treename)
     self.__entered = True
     self.__t.SetBranchStatus("*", 0)
+
+    bkpdirectory.cd()
     for args, kwargs in self.__templatecomponentargs:
       self.maketemplatecomponent(*args, **kwargs)
+
     return self
 
   def __exit__(self, *errorstuff):
@@ -35,7 +42,8 @@ class Tree(object):
       raise RuntimeError("Can't add a template component after entering the tree")
 
     self.__templatecomponentargs.append((args, kwargs))
-    return lambda: self.__templatecomponents[len(self.__templatecomponentargs)-1]
+    index = len(self.__templatecomponentargs)-1
+    return lambda: self.__templatecomponents[index]
 
   def maketemplatecomponent(
     self, name,
