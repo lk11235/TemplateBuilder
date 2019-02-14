@@ -1,6 +1,9 @@
+import array
 import collections
 import functools
 import re
+
+import uncertainties
 
 import ROOT
 
@@ -67,6 +70,13 @@ class TemplateComponent(object):
       raise ValueError("Can't fill {} after it's locked".format(self))
     if self.passcut():
       self.__h.Fill(self.binx(), self.biny(), self.binz(), self.weight())
+
+  @property
+  def integral(self):
+    self.lock()
+    error = array.array("d", [0])
+    nominal = self.__h.IntegralAndError(1, self.__h.GetNbinsX(), 1, self.__h.GetNbinsY(), 1, self.__h.GetNbinsZ(), error)
+    return uncertainties.ufloat(nominal, error[0])
 
   def GetBinContentError(self, *args):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))

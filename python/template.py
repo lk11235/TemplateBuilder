@@ -1,3 +1,4 @@
+import array
 from collections import Counter
 
 import uncertainties
@@ -14,7 +15,7 @@ class Template(object):
     mirrortype, scaleby, floor,
   ):
     self.__name = name
-    self.__templatecomponents = [
+    self.__templatecomponenthandles = [
       tree.registertemplatecomponent(
         name+"_"+str(i),
         xformula, xbins, xmin, xmax,
@@ -46,11 +47,17 @@ class Template(object):
     self.__floor = floor
 
   @property
-  def name(self): return self.name
+  def name(self): return self.__name
 
   @property
   def binsxyz(self):
     return itertools.product(xrange(1, self.__xbins+1), xrange(1, self.__ybins+1), xrange(1, self.__zbins+1))
+
+  @property
+  def integral(self):
+    error = array.array("d", [0])
+    nominal = self.__h.IntegralAndError(1, self.__h.GetNbinsX(), error)
+    return uncertainties.ufloat(nominal, error[0])
 
   def __domirror(self):
     for x, y, z in self.binsxyz:
@@ -91,9 +98,19 @@ class Template(object):
         self.__h.SetBinContent(x, y, z, floor.nominal_value)
         self.__h.SetBinError(x, y, z, floor.std_dev)
 
+  @property
+  def __templatecomponents(self):
+    return [handle() for handle in self.__templatecomponenthandles]
+
   def makefinaltemplate(self):
+    print
+    print "Making the final template:"
+    print "  "+self.name
+    print "from individual templates with integrals:"
+
     for component in self.__templatecomponents:
       component.lock()
+      print "  {:20} {:8.3e}".format(component.name, component.integral)
 
     flooredbins = []
 
@@ -122,3 +139,7 @@ class Template(object):
 
     if self.__mirrortype is not None: self.__domirror()
     if self.__floor is not None: self.__dofloor()
+
+    print "final integral = "+self.integral
+
+    print

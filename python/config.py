@@ -194,14 +194,13 @@ class JsonReader(JsonDictWithFormat):
           ),
           "weight": JsonStr,
         },
+        defaultvalues = {
+          "postprocessing": [],
+          "selection": "1",
+          "weight": "1",
+        },
       ),
     ),
-  }
-
-  defaultvalues = {
-    "postprocessing": [],
-    "selection": "1",
-    "weight": "1",
   }
 
   def maketemplates(self):
@@ -253,3 +252,6 @@ class JsonReader(JsonDictWithFormat):
       for tree in alltrees:
         with tree:
           tree.fillall()
+
+      for template in templates:
+        template.makefinaltemplate()

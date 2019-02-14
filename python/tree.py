@@ -35,6 +35,7 @@ class Tree(object):
       raise RuntimeError("Can't add a template component after entering the tree")
 
     self.__templatecomponentargs.append((args, kwargs))
+    return lambda: self.__templatecomponents[len(self.__templatecomponentargs)-1]
 
   def maketemplatecomponent(
     self, name,
@@ -82,9 +83,17 @@ class Tree(object):
       if i % 10000 == 0 or i == len(self):
         print "{} / {}".format(i, len(self))
 
-    self.__t.Show()
-
   def fillall(self):
+    print
+    print "Filling:"
+    for _ in self.__templatecomponents:
+       print "  "+_.name
+    print
     for entry in self:
       for _ in self.__templatecomponents:
         _.fill()
+    print
+    print "Integrals:"
+    for _ in self.__templatecomponents:
+       print "  {:20} {:8.3e}".format(_.name, _.integral)
+    print
