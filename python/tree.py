@@ -57,6 +57,12 @@ class Tree(object):
     for formula in xformula, yformula, zformula, weightformula, cutformula:
       for branch in re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]+\b", formula):
         self.__t.SetBranchStatus(branch, 1)
+        if len(self):
+          try:
+            self.__t.GetEntry(0)
+            getattr(self.__t, branch)
+          except AttributeError:
+            raise ValueError("Bad branch "+branch+" in "+str(self))
 
     self.__templatecomponents.append(
       TemplateComponent(
