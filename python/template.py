@@ -126,7 +126,7 @@ class Template(object):
       for component in self.__templatecomponents:
         bincontent[component.name] = component.GetBinContentError(x, y, z)
 
-      while True:
+      while len(bincontent) >= 2:
         #remove outliers:
         #find the unbiased residual and its error for each component
         #if any have a signficance of 3sigma, remove the one with the biggest significance
