@@ -127,14 +127,23 @@ class Template(object):
         bincontent[component.name] = component.GetBinContentError(x, y, z)
 
       while True:
-        averagebincontent = weightedaverage(bincontent.itervalues())
-        maxdifferencesignificance, namewithmaxdifference = max(
-          (abs((content - averagebincontent).n / (content - averagebincontent).s), name)
-          for name, content in bincontent.items()
-        )
-        if maxdifferencesignificance > 3:
-          outliers[namewithmaxdifference] += 1
-          del bincontent[namewithmaxdifference]
+        #remove outliers:
+        #find the unbiased residual and its error for each component
+        #if any have a signficance of 3sigma, remove the one with the biggest significance
+        #then start over, since the unbiased residuals for the other components are modified
+        #by removing this one
+        maxresidual = 0
+        significances = {}
+        for name, content in bincontent.iteritems():
+          unbiasedresidual = (
+            content
+            - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername != name)
+          )
+          significances[name] = abs(unbiasedresidual.n) / unbiasedresidual.s
+        namewithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
+        if maxsignificance > 3:
+          outliers[namewithmaxsignificance] += 1
+          del bincontent[namewithmaxsignificance]
         else:
           break
 
@@ -145,7 +154,7 @@ class Template(object):
       self.__h.SetBinContent(x, y, z, finalbincontent.nominal_value)
       self.__h.SetBinError(x, y, z, finalbincontent.std_dev)
 
-    if outliers: print self.name + ": the following samples had outliers in some bins: " + ", ".join("{} ({})".format(k, v) for k, v in outliers.iteritems())
+    if outliers: print "Warning: the following components had outliers in some bins: " + ", ".join("{} ({})".format(k, v) for k, v in outliers.iteritems())
 
     if self.__mirrortype is not None: self.__domirror()
     if self.__floor is not None: self.__dofloor()

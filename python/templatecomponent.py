@@ -33,6 +33,14 @@ class TemplateComponent(object):
       zbins, zmin, zmax,
     )
 
+    self.__habs = ROOT.TH3F(
+      name+"_absweights", name+"_absweights",
+      xbins, xmin, xmax,
+      ybins, ymin, ymax,
+      zbins, zmin, zmax,
+    )
+    self.__habs.SetDirectory(0)
+
     self.__forcewithinlimitsx = functools.partial(
       self.forcewithinlimits,
       xmin + (xmax - xmin) / xbins / 10, 
@@ -74,7 +82,12 @@ class TemplateComponent(object):
     if self.__locked:
       raise ValueError("Can't fill {} after it's locked".format(self))
     if self.passcut():
-      self.__h.Fill(self.binx(), self.biny(), self.binz(), self.weight())
+      binx = self.binx()
+      biny = self.biny()
+      binz = self.binz()
+      weight = self.weight()
+      self.__h.Fill(binx, biny, binz, weight)
+      self.__habs.Fill(binx, biny, binz, abs(weight))
 
   @property
   def integral(self):
@@ -95,15 +108,15 @@ class TemplateComponent(object):
 
     #floor the error
     maxerrorratio, errortoset = max(
-      (abs(self.__h.GetBinError(x, y, z) / self.__h.GetBinContent(x, y, z)), self.__h.GetBinError(x, y, z))
+      (self.__habs.GetBinError(x, y, z) / self.__habs.GetBinContent(x, y, z), self.__h.GetBinError(x, y, z))
         for x, y, z in self.binsxyz
-      if self.__h.GetBinContent(x, y, z) != 0
+      if self.__habs.GetBinContent(x, y, z) != 0
     )
     #the reasoning being that if there's a bin with just one entry 2.3 +/- 2.3, then the zero bin could also have 2.3
     #but we can't draw that conclusion from a bin 1000 +/- 5.5
 
     for x, y, z in self.binsxyz:
-      if self.__h.GetBinContent(x, y, z) == 0:
+      if self.__h.GetBinError(x, y, z) == 0:
         self.__h.SetBinError(x, y, z, errortoset)
 
     self.__locked = True
