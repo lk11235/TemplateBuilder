@@ -12,13 +12,14 @@ TreeVariable = collections.namedtuple("TreeVariable", "formula nbins min max")
 
 class TemplateComponent(object):
   def __init__(
-    self, name,
+    self, name, printprefix,
     xtreeformula, xbins, xmin, xmax,
     ytreeformula, ybins, ymin, ymax,
     ztreeformula, zbins, zmin, zmax,
     cuttreeformula, weighttreeformula,
   ):
     self.__name = name
+    self.__printprefix = printprefix
 
     self.__xtreeformula = xtreeformula
     self.__ytreeformula = ytreeformula
@@ -125,3 +126,6 @@ class TemplateComponent(object):
   @property
   def name(self):
     return self.__name
+  @property
+  def printprefix(self):
+    return self.__printprefix

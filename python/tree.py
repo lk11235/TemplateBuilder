@@ -46,7 +46,7 @@ class Tree(object):
     return lambda: self.__templatecomponents[index]
 
   def maketemplatecomponent(
-    self, name,
+    self, name, printprefix,
     xformula, xbins, xmin, xmax,
     yformula, ybins, ymin, ymax,
     zformula, zbins, zmin, zmax,
@@ -68,7 +68,7 @@ class Tree(object):
     with RootCd(directory):
       self.__templatecomponents.append(
         TemplateComponent(
-          name,
+          name, printprefix,
           ROOT.TTreeFormula(name+"_x", xformula, self.__t), xbins, xmin, xmax,
           ROOT.TTreeFormula(name+"_y", yformula, self.__t), ybins, ymin, ymax,
           ROOT.TTreeFormula(name+"_z", zformula, self.__t), zbins, zmin, zmax,
@@ -103,7 +103,7 @@ class Tree(object):
     print
     print "Filling:"
     for _ in self.__templatecomponents:
-       print "  "+_.name
+       print "  {:40} {:45}".format(_.printprefix, _.name)
     print
     for entry in self:
       for _ in self.__templatecomponents:
@@ -111,5 +111,5 @@ class Tree(object):
     print
     print "Integrals:"
     for _ in self.__templatecomponents:
-       print "  {:20} {:8.3e}".format(_.name, _.integral)
+       print "  {:40} {:45} {:10.3e}".format(_.printprefix, _.name, _.integral)
     print

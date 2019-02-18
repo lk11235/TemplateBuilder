@@ -10,7 +10,7 @@ from moreuncertainties import weightedaverage
 
 class Template(object):
   def __init__(
-    self, name, trees,
+    self, name, printprefix, trees,
     xformula, xbins, xmin, xmax,
     yformula, ybins, ymin, ymax,
     zformula, zbins, zmin, zmax,
@@ -22,9 +22,10 @@ class Template(object):
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in filenames))[::-1]
 
     self.__name = name
+    self.__printprefix = printprefix
     self.__templatecomponenthandles = [
       tree.registertemplatecomponent(
-        name+"_"+tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
+        name+"_"+tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1], printprefix,
         xformula, xbins, xmin, xmax,
         yformula, ybins, ymin, ymax,
         zformula, zbins, zmin, zmax,
@@ -57,6 +58,8 @@ class Template(object):
 
   @property
   def name(self): return self.__name
+  @property
+  def printprefix(self): return self.__printprefix
 
   @property
   def binsxyz(self):
@@ -115,12 +118,12 @@ class Template(object):
   def makefinaltemplate(self):
     print
     print "Making the final template:"
-    print "  "+self.name
+    print "  {:40} {:45}".format(self.printprefix, self.name)
     print "from individual templates with integrals:"
 
     for component in self.__templatecomponents:
       component.lock()
-      print "  {:20} {:8.3e}".format(component.name, component.integral)
+      print "  {:45} {:10.3e}".format(component.name, component.integral)
 
     flooredbins = []
 
@@ -153,7 +156,7 @@ class Template(object):
           break
 
       if len(bincontent) < len(self.__templatecomponents) / 2.:
-        raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:20} {:8.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in self.__templatecomponents))
+        raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:45} {:10.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in self.__templatecomponents))
 
       if all(_.n == _.s == 0 for _ in bincontent.itervalues()):  #special case, empty histogram
         finalbincontent = bincontent.values()[0]
@@ -167,6 +170,6 @@ class Template(object):
     if self.__mirrortype is not None: self.__domirror()
     if self.__floor is not None: self.__dofloor()
 
-    print "final integral = {:8.3e}".format(self.integral)
+    print "final integral = {:10.3e}".format(self.integral)
 
     print

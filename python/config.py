@@ -220,8 +220,11 @@ class TemplateBuilder(object):
 
     outfilenames = [config["outputFile"] for config in self.__configs]
 
+    commonprefix = os.path.commonprefix(outfilenames)
+    commonsuffix = os.path.commonprefix(list(_[::-1] for _ in outfilenames))[::-1]
+
     with RootFiles(*outfilenames, commonargs=["CREATE"]) as newfiles:
-      for config, outfile in itertools.izip(self.__configs, newfiles):
+      for config, outfilename, outfile in itertools.izip(self.__configs, outfilenames, newfiles):
         with RootCd(outfile):
           for templateconfig in config["templates"]:
             mirrortype = None
@@ -250,7 +253,9 @@ class TemplateBuilder(object):
 
             templates.append(
               Template(
-                templateconfig["name"], trees,
+                templateconfig["name"],
+                outfilename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
+                trees,
                 templateconfig["variables"][0], templateconfig["binning"]["bins"][0], templateconfig["binning"]["bins"][1], templateconfig["binning"]["bins"][2],
                 templateconfig["variables"][1], templateconfig["binning"]["bins"][3], templateconfig["binning"]["bins"][4], templateconfig["binning"]["bins"][5],
                 templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
