@@ -134,6 +134,8 @@ class Template(object):
       for component in self.__templatecomponents:
         bincontent[component.name] = component.GetBinContentError(x, y, z)
 
+      namestoremove = set()
+
       #remove outliers:
       #first try to use all the templatecomponents, then try one, then two, etc.
       for i in xrange(len(bincontent)-1):
