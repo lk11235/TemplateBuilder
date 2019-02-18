@@ -150,7 +150,10 @@ class Template(object):
       if len(bincontent) < len(self.__templatecomponents) / 2.:
         raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:20} {:8.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in self.__templatecomponents))
 
-      finalbincontent = weightedaverage(bincontent.itervalues()) * self.__scaleby
+      if all(_.n == _.s == 0 for _ in bincontent.itervalues()):  #special case, empty histogram
+        finalbincontent = bincontent.values()[0]
+      else:                                                      #normal case
+        finalbincontent = weightedaverage(bincontent.itervalues()) * self.__scaleby
       self.__h.SetBinContent(x, y, z, finalbincontent.nominal_value)
       self.__h.SetBinError(x, y, z, finalbincontent.std_dev)
 

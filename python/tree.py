@@ -1,6 +1,6 @@
 import re
 
-from rootfile import RootFile
+from rootfile import RootCd, RootFile
 from templatecomponent import TemplateComponent
 
 class Tree(object):
@@ -19,8 +19,6 @@ class Tree(object):
 
   def __enter__(self):
     import ROOT
-    #https://root-forum.cern.ch/t/how-to-get-a-non-changing-copy-of-gdirectory-in-python/6236/2
-    bkpdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
 
     f = self.__f = RootFile(self.__filename)
     f.__enter__()
@@ -28,7 +26,6 @@ class Tree(object):
     self.__entered = True
     self.__t.SetBranchStatus("*", 0)
 
-    bkpdirectory.cd()
     for args, kwargs in self.__templatecomponentargs:
       self.maketemplatecomponent(*args, **kwargs)
 
@@ -41,6 +38,9 @@ class Tree(object):
     if self.__entered:
       raise RuntimeError("Can't add a template component after entering the tree")
 
+    import ROOT
+
+    kwargs["directory"] = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
     self.__templatecomponentargs.append((args, kwargs))
     index = len(self.__templatecomponentargs)-1
     return lambda: self.__templatecomponents[index]
@@ -51,6 +51,7 @@ class Tree(object):
     yformula, ybins, ymin, ymax,
     zformula, zbins, zmin, zmax,
     cutformula, weightformula,
+    directory,
   ):
     import ROOT
 
@@ -64,16 +65,17 @@ class Tree(object):
           except AttributeError:
             raise ValueError("Bad branch "+branch+" in "+str(self))
 
-    self.__templatecomponents.append(
-      TemplateComponent(
-        name,
-        ROOT.TTreeFormula(name+"_x", xformula, self.__t), xbins, xmin, xmax,
-        ROOT.TTreeFormula(name+"_y", yformula, self.__t), ybins, ymin, ymax,
-        ROOT.TTreeFormula(name+"_z", zformula, self.__t), zbins, zmin, zmax,
-        ROOT.TTreeFormula(name+"_cut", cutformula, self.__t),
-        ROOT.TTreeFormula(name+"_weight", weightformula, self.__t),
+    with RootCd(directory):
+      self.__templatecomponents.append(
+        TemplateComponent(
+          name,
+          ROOT.TTreeFormula(name+"_x", xformula, self.__t), xbins, xmin, xmax,
+          ROOT.TTreeFormula(name+"_y", yformula, self.__t), ybins, ymin, ymax,
+          ROOT.TTreeFormula(name+"_z", zformula, self.__t), zbins, zmin, zmax,
+          ROOT.TTreeFormula(name+"_cut", cutformula, self.__t),
+          ROOT.TTreeFormula(name+"_weight", weightformula, self.__t),
+        )
       )
-    )
 
   def __str__(self):
     return "{}:{}".format(self.__filename, self.__treename)

@@ -1,12 +1,13 @@
 import abc
 import collections
+import itertools
 import json
 import numbers
 import os
 
 import uncertainties
 
-from rootfile import RootFile
+from rootfile import RootCd, RootFiles
 from tree import Tree
 from template import Template
 
@@ -203,51 +204,60 @@ class JsonReader(JsonDictWithFormat):
     ),
   }
 
+class TemplateBuilder(object):
+  def __init__(self, *filenames):
+    self.__configs = [JsonReader(filename) for filename in filenames]
+
   def maketemplates(self):
     templates = []
 
     treeargs = set()
-    for templateconfig in self["templates"]:
-      for filename in templateconfig["files"]:
-        treeargs.add((os.path.join(self["inputDirectory"], filename), templateconfig["tree"]))
+    for config in self.__configs:
+      for templateconfig in config["templates"]:
+        for filename in templateconfig["files"]:
+          treeargs.add((os.path.join(config["inputDirectory"], filename), templateconfig["tree"]))
     alltrees = {Tree(*args) for args in treeargs}
 
-    with RootFile(self["outputFile"], "CREATE") as newf:
-      for templateconfig in self["templates"]:
-        mirrortype = None
-        scaleby = None
-        floor = None
-        for postprocessing in templateconfig["postprocessing"]:
-          if postprocessing["type"] == "mirror":
-            if mirrortype is not None: raise ValueError("Multiple mirror blocks in {.nameforerror}".format(postprocessing))
-            mirrortype = "antisymmetric" if postprocessing.get("antisymmetric", False) else "symmetric"
-          elif postprocessing["type"] == "rescale":
-            if scaleby is not None: raise ValueError("Multiple rescale blocks in {.nameforerror}".format(postprocessing))
-            scaleby = uncertainties.ufloat(postprocessing["factor"], postprocessing.get("factorerror", 0))
-          elif postprocessing["type"] == "floor":
-            if floor is not None: raise ValueError("Multiple floor blocks in {.nameforerror}".format(postprocessing))
-            floor = uncertainties.ufloat(postprocessing["floorvalue"], postprocessing.get("floorerror", 0))
+    outfilenames = [config["outputFile"] for config in self.__configs]
 
-        trees = [
-          tree for tree in alltrees
-            if tree.treename == templateconfig["tree"]
-            and tree.filename in [
-              os.path.join(self["inputDirectory"], filename) for filename in templateconfig["files"]
+    with RootFiles(*outfilenames, commonargs=["CREATE"]) as newfiles:
+      for config, outfile in itertools.izip(self.__configs, newfiles):
+        with RootCd(outfile):
+          for templateconfig in config["templates"]:
+            mirrortype = None
+            scaleby = None
+            floor = None
+            for postprocessing in templateconfig["postprocessing"]:
+              if postprocessing["type"] == "mirror":
+                if mirrortype is not None: raise ValueError("Multiple mirror blocks in {.nameforerror}".format(postprocessing))
+                mirrortype = "antisymmetric" if postprocessing.get("antisymmetric", False) else "symmetric"
+              elif postprocessing["type"] == "rescale":
+                if scaleby is not None: raise ValueError("Multiple rescale blocks in {.nameforerror}".format(postprocessing))
+                scaleby = uncertainties.ufloat(postprocessing["factor"], postprocessing.get("factorerror", 0))
+              elif postprocessing["type"] == "floor":
+                if floor is not None: raise ValueError("Multiple floor blocks in {.nameforerror}".format(postprocessing))
+                floor = uncertainties.ufloat(postprocessing["floorvalue"], postprocessing.get("floorerror", 0))
+
+            trees = [
+              tree for tree in alltrees
+                if tree.treename == templateconfig["tree"]
+                and tree.filename in [
+                  os.path.join(config["inputDirectory"], filename) for filename in templateconfig["files"]
+                ]
             ]
-        ]
 
-        assert len(trees) == len(templateconfig["files"]), (len(trees), len(templateconfig["files"]))
+            assert len(trees) == len(templateconfig["files"]), (len(trees), len(templateconfig["files"]))
 
-        templates.append(
-          Template(
-            templateconfig["name"], trees,
-            templateconfig["variables"][0], templateconfig["binning"]["bins"][0], templateconfig["binning"]["bins"][1], templateconfig["binning"]["bins"][2],
-            templateconfig["variables"][1], templateconfig["binning"]["bins"][3], templateconfig["binning"]["bins"][4], templateconfig["binning"]["bins"][5],
-            templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
-            templateconfig["selection"], templateconfig["weight"],
-            mirrortype, scaleby, floor
-          )
-        )
+            templates.append(
+              Template(
+                templateconfig["name"], trees,
+                templateconfig["variables"][0], templateconfig["binning"]["bins"][0], templateconfig["binning"]["bins"][1], templateconfig["binning"]["bins"][2],
+                templateconfig["variables"][1], templateconfig["binning"]["bins"][3], templateconfig["binning"]["bins"][4], templateconfig["binning"]["bins"][5],
+                templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
+                templateconfig["selection"], templateconfig["weight"],
+                mirrortype, scaleby, floor
+              )
+            )
 
       for tree in alltrees:
         with tree:

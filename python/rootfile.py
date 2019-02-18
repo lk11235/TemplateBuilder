@@ -1,3 +1,4 @@
+import contextlib
 import os
 
 class RootFile(object):
@@ -7,6 +8,7 @@ class RootFile(object):
     self.__entered = False
   def __enter__(self):
     import ROOT
+    self.__bkpdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
     self.__f = ROOT.TFile.Open(self.__filename, *self.__args)
     self.__entered = True
     if not self.__f:
@@ -20,8 +22,31 @@ class RootFile(object):
     if self.__write and not any(errorstuff):
       self.Write()
     self.Close()
+    self.__bkpdirectory.cd()
     if self.__write and any(errorstuff):
       os.remove(self.__filename)
   def __getattr__(self, attr):
     if self.__entered:
       return getattr(self.__f, attr)
+
+@contextlib.contextmanager
+def RootFiles(*filenames, **kwargs):
+  if not filenames: yield []; return
+
+  commonargs = kwargs.pop("commonargs", ())
+  if kwargs: raise ValueError("Unknown kwargs: "+" ".join(kwargs))
+
+  with RootFile(filenames[0], *commonargs) as f, RootFiles(*filenames[1:], commonargs=commonargs) as morefs:
+    yield [f]+morefs
+
+@contextlib.contextmanager
+def RootCd(tdirectory, *args, **kwargs):
+  import ROOT
+
+  #https://root-forum.cern.ch/t/how-to-get-a-non-changing-copy-of-gdirectory-in-python/6236/2
+  bkpdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
+  try:
+    tdirectory.cd(*args, **kwargs)
+    yield
+  finally:
+    bkpdirectory.cd()

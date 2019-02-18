@@ -106,18 +106,19 @@ class TemplateComponent(object):
   def lock(self):
     if self.__locked: return
 
-    #floor the error
-    maxerrorratio, errortoset = max(
-      (self.__habs.GetBinError(x, y, z) / self.__habs.GetBinContent(x, y, z), self.__h.GetBinError(x, y, z))
-        for x, y, z in self.binsxyz
-      if self.__habs.GetBinContent(x, y, z) != 0
-    )
-    #the reasoning being that if there's a bin with just one entry 2.3 +/- 2.3, then the zero bin could also have 2.3
-    #but we can't draw that conclusion from a bin 1000 +/- 5.5
+    if self.__habs.GetEntries():
+      #floor the error
+      maxerrorratio, errortoset = max(
+        (self.__habs.GetBinError(x, y, z) / self.__habs.GetBinContent(x, y, z), self.__h.GetBinError(x, y, z))
+          for x, y, z in self.binsxyz
+        if self.__habs.GetBinError(x, y, z) != 0
+      )
+      #the reasoning being that if there's a bin with just one entry 2.3 +/- 2.3, then the zero bin could also have 2.3
+      #but we can't draw that conclusion from a bin 1000 +/- 5.5
 
-    for x, y, z in self.binsxyz:
-      if self.__h.GetBinError(x, y, z) == 0:
-        self.__h.SetBinError(x, y, z, errortoset)
+      for x, y, z in self.binsxyz:
+        if self.__h.GetBinError(x, y, z) == 0:
+          self.__h.SetBinError(x, y, z, errortoset)
 
     self.__locked = True
 
