@@ -1,5 +1,6 @@
 import array
 import itertools
+import os
 
 from collections import Counter
 
@@ -16,10 +17,14 @@ class Template(object):
     cutformula, weightformula,
     mirrortype, scaleby, floor,
   ):
+    filenames = [tree.filename for tree in trees]
+    commonprefix = os.path.commonprefix(filenames)
+    commonsuffix = os.path.commonprefix(list(_[::-1] for _ in filenames))[::-1]
+
     self.__name = name
     self.__templatecomponenthandles = [
       tree.registertemplatecomponent(
-        name+"_"+str(i),
+        name+"_"+tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
         xformula, xbins, xmin, xmax,
         yformula, ybins, ymin, ymax,
         zformula, zbins, zmin, zmax,
