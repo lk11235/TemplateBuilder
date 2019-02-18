@@ -134,26 +134,51 @@ class Template(object):
       for component in self.__templatecomponents:
         bincontent[component.name] = component.GetBinContentError(x, y, z)
 
-      while len(bincontent) >= 2:
-        #remove outliers:
-        #find the unbiased residual and its error for each component
-        #if any have a signficance of 3sigma, remove the one with the biggest significance
-        #then start over, since the unbiased residuals for the other components are modified
-        #by removing this one
-        maxresidual = 0
+      #remove outliers:
+      #first try to use all the templatecomponents, then try one, then two, etc.
+      for i in xrange(len(bincontent)-1):
         significances = {}
-        for name, content in bincontent.iteritems():
-          unbiasedresidual = (
-            content
-            - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername != name)
-          )
-          significances[name] = abs(unbiasedresidual.n) / unbiasedresidual.s
-        namewithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
-        if maxsignificance > 3:
-          outliers[namewithmaxsignificance] += 1
-          del bincontent[namewithmaxsignificance]
-        else:
+        #for each number: loop through the combinations of templatecomponents to possibly remove
+        for namestomayberemove in itertools.combinations(bincontent, i):
+          contentstomayberemove = tuple(bincontent[_] for _ in namestomayberemove)
+          for name, content in bincontent.iteritems():
+            #for each remaining templatecomponent, find the unbiased residual between its bin content
+            #and the bin content predicted by the other remaining components
+            if name in namestomayberemove: continue
+            newunbiasedresidual = (
+              content
+              - weightedaverage(othercontent
+                for othername, othercontent in bincontent.iteritems()
+                if othername != name and othername not in namestomayberemove
+              )
+            )
+            significance = abs(newunbiasedresidual.n) / newunbiasedresidual.s
+            #if there's a 3sigma difference, then this combination of templatecomponents to remove is no good
+            if significance > 3: break #out of the loop over remaining names
+          else:
+            #no remaining unbiased residuals are 3sigma
+            #that means this combination of templatecomponents is a candidate to remove
+            #if multiple combinations of the same number of templatecomponents fit this criterion,
+            #then we pick the one that itself has the biggest normalized residual from the other templatecomponents
+            #therefore we store it in significances
+            if contentstomayberemove:
+              unbiasedresidual = (
+                weightedaverage(contentstomayberemove)
+                - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername not in namestomayberemove)
+              )
+              significances[namestomayberemove] = abs(unbiasedresidual.n) / unbiasedresidual.s
+            else:
+              significances[namestomayberemove] = float("inf")
+
+        if significances:
+          nameswithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
+          namestoremove = nameswithmaxsignificance
           break
+
+      if namestoremove:
+        outliers[frozenset(namestoremove)] += 1
+      for name in namestoremove:
+        del bincontent[name]
 
       if len(bincontent) < len(self.__templatecomponents) / 2.:
         raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:45} {:10.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in self.__templatecomponents))
@@ -165,7 +190,7 @@ class Template(object):
       self.__h.SetBinContent(x, y, z, finalbincontent.nominal_value)
       self.__h.SetBinError(x, y, z, finalbincontent.std_dev)
 
-    if outliers: print "Warning: the following components had outliers in some bins: " + ", ".join("{} ({})".format(k, v) for k, v in outliers.iteritems())
+    if outliers: print "Warning: the following component combinations had outliers in some bins: " + ", ".join("{} ({})".format(tuple(sorted(k)), v) for k, v in outliers.iteritems())
 
     if self.__mirrortype is not None: self.__domirror()
     if self.__floor is not None: self.__dofloor()
