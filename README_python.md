@@ -1,7 +1,9 @@
-Template builder
-================
+Template builder python implementation
+======================================
 
-This is meant as a partial replacement for [Jean-Baptiste's template builder](https://github.com/jbsauvan/TemplateBuilder/)
+The main script for the python implementation is [scripts/buildTemplates.py](scripts/buildTemplates.py).
+
+This is meant as a partial replacement for [Jean-Baptiste's template builder](README).
 It doesn't have all the functionality - most notably, no smoothing.  However, for templates that don't need to
 be smoothed it works much faster, and when reweighting from multiple samples it automatically averages based
 on the statistics of each sample.
