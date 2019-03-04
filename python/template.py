@@ -115,7 +115,9 @@ class Template(object):
   def __templatecomponents(self):
     return [handle() for handle in self.__templatecomponenthandles]
 
-  def makefinaltemplate(self):
+  def makefinaltemplate(self, printbins):
+    printbins = tuple(tuple(_) for _ in printbins)
+    assert all(len(_) == 3 for _ in printbins)
     print
     print "Making the final template:"
     print "  {:40} {:45}".format(self.printprefix, self.name)
@@ -126,8 +128,8 @@ class Template(object):
       print "  {:45} {:10.3e}".format(component.name, component.integral)
 
     flooredbins = []
-
-    outliers = Counter()
+    outlierwarning = []
+    printedbins = []
 
     for x, y, z in self.binsxyz:
       bincontent = {}
@@ -178,7 +180,7 @@ class Template(object):
           break
 
       if namestoremove:
-        outliers[frozenset(namestoremove)] += 1
+        outlierwarning.append("  {:3d} {:3d} {:3d}: {}".format(x, y, z, ", ".join(sorted(namestoremove))))
       for name in namestoremove:
         del bincontent[name]
 
@@ -189,14 +191,31 @@ class Template(object):
         finalbincontent = bincontent.values()[0]
       else:                                                      #normal case
         finalbincontent = weightedaverage(bincontent.itervalues()) * self.__scaleby
+
+      if (x, y, z) in printbins:
+        thingtoprint = "  {:3d} {:3d} {:3d}:".format(x, y, z)
+        fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+        for name, content in bincontent.iteritems():
+          thingtoprint += "\n"+fmt.format(name, content)
+        thingtoprint += "\n"+fmt.format("final", finalbincontent)
+        printedbins.append(thingtoprint)
+
       self.__h.SetBinContent(x, y, z, finalbincontent.nominal_value)
       self.__h.SetBinError(x, y, z, finalbincontent.std_dev)
 
-    if outliers: print "Warning: the following component combinations had outliers in some bins: " + ", ".join("{} ({})".format(tuple(sorted(k)), v) for k, v in outliers.iteritems())
+    if outlierwarning:
+      print
+      print "Warning: there are outliers in some bins:"
+      for _ in outlierwarning: print _
+
+    if printedbins:
+      print
+      print "Bins you requested to print:"
+      for _ in printedbins: print _
 
     if self.__mirrortype is not None: self.__domirror()
     if self.__floor is not None: self.__dofloor()
 
+    print
     print "final integral = {:10.3e}".format(self.integral)
-
     print

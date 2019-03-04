@@ -205,8 +205,12 @@ class JsonReader(JsonDictWithFormat):
   }
 
 class TemplateBuilder(object):
-  def __init__(self, *filenames):
+  def __init__(self, *filenames, **kwargs):
     self.__configs = [JsonReader(filename) for filename in filenames]
+    self.__printbins = tuple(kwargs.pop("printbins", ()))
+    self.__force = kwargs.pop("force", False)
+    if kwargs:
+      raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
 
   def maketemplates(self):
     templates = []
@@ -223,7 +227,7 @@ class TemplateBuilder(object):
     commonprefix = os.path.commonprefix(outfilenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in outfilenames))[::-1]
 
-    with RootFiles(*outfilenames, commonargs=["CREATE"]) as newfiles:
+    with RootFiles(*outfilenames, commonargs=["RECREATE" if self.__force else "CREATE"]) as newfiles:
       for config, outfilename, outfile in itertools.izip(self.__configs, outfilenames, newfiles):
         with RootCd(outfile):
           for templateconfig in config["templates"]:
@@ -269,4 +273,4 @@ class TemplateBuilder(object):
           tree.fillall()
 
       for template in templates:
-        template.makefinaltemplate()
+        template.makefinaltemplate(printbins=self.__printbins)
