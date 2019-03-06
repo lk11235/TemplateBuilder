@@ -7,6 +7,7 @@ import os
 
 import uncertainties
 
+from constrainedtemplates import ConstrainedTemplates
 from rootfile import RootCd, RootFiles
 from tree import Tree
 from template import Template
@@ -68,6 +69,10 @@ class JsonList(JsonBase):
     return len(self.json)
   def __contains__(self, other):
     return any(other == _ for _ in self)
+
+  def append(self, item):
+    self.json.append(item)
+    type(self)(self.json, self.nameforerror)
 
 class JsonListWithFormat(JsonList, collections.Sequence):
   def __init__(self, *args, **kwargs):
@@ -157,6 +162,15 @@ class JsonReader(JsonDictWithFormat):
   format = {
     "inputDirectory": JsonStr,
     "outputFile": JsonStr,
+    "constraints": UniformJsonListOf(
+      JsonDictWithThisFormat(
+        "JsonConstraintConfig",
+        format={
+          "type": JsonStr,
+          "templates": UniformJsonListOf(JsonStr),
+        },
+      ),
+    ),
     "templates": UniformJsonListOf(
       JsonDictWithThisFormat(
         "JsonTemplateConfig",
@@ -204,6 +218,10 @@ class JsonReader(JsonDictWithFormat):
     ),
   }
 
+  defaultvalues = {
+    "constraints": [],
+  }
+
 class TemplateBuilder(object):
   def __init__(self, *filenames, **kwargs):
     self.__configs = [JsonReader(filename) for filename in filenames]
@@ -214,6 +232,7 @@ class TemplateBuilder(object):
 
   def maketemplates(self):
     templates = []
+    constraints = []
 
     treeargs = set()
     for config in self.__configs:
@@ -226,6 +245,8 @@ class TemplateBuilder(object):
 
     commonprefix = os.path.commonprefix(outfilenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in outfilenames))[::-1]
+
+    templatesbyname = {}
 
     with RootFiles(*outfilenames, commonargs=["RECREATE" if self.__force else "CREATE"]) as newfiles:
       for config, outfilename, outfile in itertools.izip(self.__configs, outfilenames, newfiles):
@@ -255,22 +276,37 @@ class TemplateBuilder(object):
 
             assert len(trees) == len(templateconfig["files"]), (len(trees), len(templateconfig["files"]))
 
-            templates.append(
-              Template(
-                templateconfig["name"],
-                outfilename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
-                trees,
-                templateconfig["variables"][0], templateconfig["binning"]["bins"][0], templateconfig["binning"]["bins"][1], templateconfig["binning"]["bins"][2],
-                templateconfig["variables"][1], templateconfig["binning"]["bins"][3], templateconfig["binning"]["bins"][4], templateconfig["binning"]["bins"][5],
-                templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
-                templateconfig["selection"], templateconfig["weight"],
-                mirrortype, scaleby, floor
-              )
+            template = Template(
+              templateconfig["name"],
+              outfilename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
+              trees,
+              templateconfig["variables"][0], templateconfig["binning"]["bins"][0], templateconfig["binning"]["bins"][1], templateconfig["binning"]["bins"][2],
+              templateconfig["variables"][1], templateconfig["binning"]["bins"][3], templateconfig["binning"]["bins"][4], templateconfig["binning"]["bins"][5],
+              templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
+              templateconfig["selection"], templateconfig["weight"],
+              mirrortype, scaleby, floor
             )
+
+            templates.append(template)
+
+            if not any(template.name in constraintconfig for constraintconfig in config["constraints"]):
+              config["constraints"].append({"type": "unconstrained", "templates": [template.name]})
+
+            templatesbyname[template.name] = template
+
+          for constraintconfig in config["constraints"]:
+            constrainttype = constraintconfig["type"]
+            constrainedtemplates = []
+            for name in constraintconfig["templates"]:
+              try:
+                constrainedtemplates.append(templatesbyname.pop(name))
+              except KeyError:
+                raise ValueError("Trying to use {} for a constraint, but didn't find this template.  (Or maybe it's used for multiple constraints.  Don't do that.)")
+            constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates))
 
       for tree in alltrees:
         with tree:
           tree.fillall()
 
-      for template in templates:
-        template.makefinaltemplate(printbins=self.__printbins)
+      for constraint in constraints:
+        constraint.makefinaltemplates(printbins=self.__printbins)
