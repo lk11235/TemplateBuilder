@@ -36,12 +36,16 @@ class Template(object):
 
     import ROOT
 
+    self.__tdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
+
     self.__h = ROOT.TH3F(
       name, name,
       xbins, xmin, xmax,
       ybins, ymin, ymax,
       zbins, zmin, zmax,
     )
+
+    self.__h.SetDirectory(0)
 
     self.__xbins = xbins
     self.__ybins = ybins
@@ -56,7 +60,7 @@ class Template(object):
 
     self.__floor = floor
 
-    self.__didscale = self.__didmirror = self.__didfloor = False
+    self.__finalized = self.__didscale = self.__didmirror = self.__didfloor = False
 
   @property
   def name(self): return self.__name
@@ -77,8 +81,10 @@ class Template(object):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
 
   def SetBinContentError(self, *args):
-    self.__h.SetBinContent(*args[:-1]+(args[-1].n,))
-    self.__h.SetBinError(*args[:-1]+(args[-1].s,))
+    if self.finalized:
+      raise RuntimeError("Can't set bin content after it's finalized")
+    self.__h.SetBinContent(*args[:-1]+(uncertainties.nominal_value(args[-1]),))
+    self.__h.SetBinError(*args[:-1]+(uncertainties.std_dev(args[-1].s),))
 
   def doscale(self):
     if self.__didscale: raise RuntimeError("Trying to scale twice!")
@@ -125,11 +131,17 @@ class Template(object):
         self.__h.SetBinContent(x, y, z, floor.nominal_value)
         self.__h.SetBinError(x, y, z, floor.std_dev)
 
+  def finalize(self):
+    self.doscale()
+    self.domirror()
+    self.dofloor()
+    self.__finalized = True
+    self.__h.SetDirectory(self.__tdirectory)
+
+  @property
+  def finalized(self):
+    return self.__finalized
+
   @property
   def templatecomponents(self):
     return [handle() for handle in self.__templatecomponenthandles]
-
-  def __del__(self):
-    if not self.__didscale: raise RuntimeError("didn't scale")
-    if not self.__didmirror: raise RuntimeError("didn't mirror")
-    if not self.__didfloor: raise RuntimeError("didn't floor")

@@ -289,7 +289,7 @@ class TemplateBuilder(object):
 
             templates.append(template)
 
-            if not any(template.name in constraintconfig for constraintconfig in config["constraints"]):
+            if not any(template.name in constraintconfig["templates"] for constraintconfig in config["constraints"]):
               config["constraints"].append({"type": "unconstrained", "templates": [template.name]})
 
             templatesbyname[template.name] = template
@@ -301,7 +301,7 @@ class TemplateBuilder(object):
               try:
                 constrainedtemplates.append(templatesbyname.pop(name))
               except KeyError:
-                raise ValueError("Trying to use {} for a constraint, but didn't find this template.  (Or maybe it's used for multiple constraints.  Don't do that.)")
+                raise ValueError("Trying to use "+name+" for a constraint, but didn't find this template.  (Or maybe it's used for multiple constraints.  Don't do that.)")
             constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates))
 
       for tree in alltrees:
@@ -310,3 +310,7 @@ class TemplateBuilder(object):
 
       for constraint in constraints:
         constraint.makefinaltemplates(printbins=self.__printbins)
+
+      for template in templates:
+        if not template.finalized:
+          raise RuntimeError("Never finalized {}".format(template.name))
