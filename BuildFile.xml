@@ -2,6 +2,7 @@
 
 <flags CPPFLAGS="-I$(CMSSW_BASE)/src/TemplateBuilder/TemplateBuilder/include/ -I$(CMSSW_BASE)/src/TemplateBuilder/TemplateBuilder/include/external/" />
 
+<use name="boost"/>
 <use name="root"/>
 <use name="rootmath"/>
 <use name="rootgraphics"/>
