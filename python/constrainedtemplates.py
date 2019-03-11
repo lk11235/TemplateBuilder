@@ -24,6 +24,8 @@ def ConstrainedTemplates(constrainttype, templates):
   }[constrainttype](templates)
 
 class ConstrainedTemplatesBase(object):
+  __metaclass__ = abc.ABCMeta
+
   def __init__(self, templates):
     self.__templates = templates
     if len(templates) != self.ntemplates:
@@ -154,29 +156,36 @@ class OneTemplate(ConstrainedTemplatesBase):
     print "final integral = {:10.3e}".format(template.integral)
     print
 
-class OneParameterggH(ConstrainedTemplatesBase):
-  ntemplates = 3  #pure SM, interference, pure BSM
-
+class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
   def __init__(self, *args, **kwargs):
-    super(OneParameterggH, self).__init__(*args, **kwargs)
+    super(ConstraintedTemplatesWithFit, self).__init__(*args, **kwargs)
     if autograd is None:
       raise ImportError("To use OneParameterggH, please install autograd.")
     if not hasscipy:
       raise ImportError("To use OneParameterggH, please install a newer scipy.")
 
-  def makefinaltemplates(self, printbins):
-    SM, int, BSM = self.templates
+  @abc.abstractproperty
+  def templatenames(self): "can be a class member, names of the templates in order (e.g. SM, int, BSM)"
 
+  @abc.abstractmethod
+  def makeNLL(self, x0, sigma, nbincontents): pass
+
+  @abc.abstractmethod
+  def constraint(self, x): "can be static"
+
+  @abc.abstractmethod
+  def pureindices(self): "can be a class member"
+
+  def makefinaltemplates(self, printbins):
     printbins = tuple(tuple(_) for _ in printbins)
     assert all(len(_) == 3 for _ in printbins)
     print
     print "Making the final templates:"
-    print "  SM:  {:40} {:45}".format(SM.printprefix, SM.name)
-    print "  int: {:40} {:45}".format(int.printprefix, int.name)
-    print "  BSM: {:40} {:45}".format(BSM.printprefix, BSM.name)
+    for name, _ in itertools.izip(self.templatenames, self.templates):
+      print "  {:>10}: {:40} {:45}".format(name, _.printprefix, _.name)
     print "from individual templates with integrals:"
 
-    for _ in SM, int, BSM:
+    for _ in self.templates:
       for component in _.templatecomponents:
         component.lock()
         print "  {:45} {:10.3e}".format(component.name, component.integral)
@@ -184,73 +193,50 @@ class OneParameterggH(ConstrainedTemplatesBase):
     printedbins = []
 
     for x, y, z in self.binsxyz:
-      SMbincontent = {}
-      for component in SM.templatecomponents:
-        SMbincontent[component.name.replace(SM.name, "")] = component.GetBinContentError(x, y, z)
+      bincontent = []
+      for _ in self.templates:
+        thisonescontent = {}
+        bincontent.append(thisonescontent)
+        for component in _.templatecomponents:
+          thisonescontent[component.name.replace(_.name, "")] = component.GetBinContentError(x, y, z)
 
-      intbincontent = {}
-      for component in int.templatecomponents:
-        intbincontent[component.name.replace(int.name, "")] = component.GetBinContentError(x, y, z)
-
-      BSMbincontent = {}
-      for component in BSM.templatecomponents:
-        BSMbincontent[component.name.replace(BSM.name, "")] = component.GetBinContentError(x, y, z)
+      nbincontents = len(bincontent[0])
 
       #Each template component produces a 3D probability distribution in (SM, int, BSM)
       #FIXME: include correlations and don't approximate as Gaussian
 
-      assert set(SMbincontent) == set(intbincontent) == set(BSMbincontent)
-      assert len(SMbincontent) == len(SM.templatecomponents) == len(BSM.templatecomponents) == len(int.templatecomponents)
+      assert len({frozenset(_) for _ in bincontent}) == 1  #they should all have the same keys
 
-      x0SM, x0int, x0BSM, sigmaSM, sigmaint, sigmaBSM = [], [], [], [], [], []
+      x0 = [[] for t in self.templates]
+      sigma = [[] for t in self.templates]
 
-      for name in SMbincontent:
-        x0SM.append(SMbincontent[name].n)
-        x0int.append(intbincontent[name].n)
-        x0BSM.append(BSMbincontent[name].n)
-        sigmaSM.append(SMbincontent[name].s)
-        sigmaint.append(intbincontent[name].s)
-        sigmaBSM.append(BSMbincontent[name].s)
+      for name in bincontent[0]:
+        for thisonescontent, thisx0, thissigma in itertools.izip(bincontent, x0, sigma):
+          thisx0.append(thisonescontent[name].n)
+          thissigma.append(thisonescontent[name].s)
 
-      x0SM = np.array(x0SM)
-      x0int = np.array(x0int)
-      x0BSM = np.array(x0BSM)
-      sigmaSM = np.array(sigmaSM)
-      sigmaint = np.array(sigmaint)
-      sigmaBSM = np.array(sigmaBSM)
+      x0 = [np.array(_) for _ in x0]
+      sigma = [np.array(_) for _ in sigma]
 
-      nbincontents = len(SMbincontent)
-
-      def negativeloglikelihood(x):
-        return sum(
-          (
-            ((x[0] - x0SM[i] ) / sigmaSM[i] ) ** 2
-          + ((x[1] - x0int[i]) / sigmaint[i]) ** 2
-          + ((x[2] - x0BSM[i]) / sigmaBSM[i]) ** 2
-          ) for i in xrange(nbincontents)
-        )
-
+      negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents)
       nlljacobian = autograd.jacobian(negativeloglikelihood)
       nllhessian = autograd.hessian(negativeloglikelihood)
 
-      #|interference| <= 2*sqrt(SM*BSM)
-      #2*sqrt(SM*BSM) - |interference| >= 0
-
-      def constraint(x):
-        return np.array([2*(x[0]*x[2])**.5 - abs(x[1])])
+      constraint = self.constraint
       constraintjacobian = autograd.jacobian(constraint)
       constrainthessianv = autograd.linear_combination_of_hessians(constraint)
 
       nonlinearconstraint = optimize.NonlinearConstraint(constraint, np.finfo(np.float).eps, np.inf, constraintjacobian, constrainthessianv)
 
-      linearconstraint = optimize.LinearConstraint([[1, 0, 0], [0, 0, 1]], [0, np.inf], [0, np.inf])
+      bounds = optimize.Bounds(
+        [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
+        [np.inf for i in xrange(self.ntemplates)]
+      )
 
-      startpoint = [weightedaverage(_.itervalues()).n for _ in SMbincontent, intbincontent, BSMbincontent]
-      if startpoint[0] == 0: startpoint[0] = np.finfo(np.float).eps
-      if startpoint[2] == 0: startpoint[2] = np.finfo(np.float).eps
+      startpoint = [weightedaverage(_.itervalues()).n for _ in bincontent]
+      for i in self.pureindices:
+        if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
       print [x, y, z], startpoint
-
-      bounds = optimize.Bounds([np.finfo(float).eps, -np.inf, np.finfo(float).eps], [np.inf]*3)
 
       fitresult = optimize.minimize(
         negativeloglikelihood,
@@ -265,37 +251,57 @@ class OneParameterggH(ConstrainedTemplatesBase):
 
       print fitresult
 
-      if fitresult.status != 0:
-        warnings.warn(RuntimeWarning("Fit failed with status {}.  Message:\n{}".format(fitresult.status, fitresult.message)))
+      finalbincontent = fitresult.x
 
-      SMfinalbincontent, intfinalbincontent, BSMfinalbincontent = fitresult.x
+      if fitresult.status != 0:
+        warnings.warn(RuntimeWarning("Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)))
 
       if (x, y, z) in printbins:
         thingtoprint = "  {:3d} {:3d} {:3d}:".format(x, y, z)
-        fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(SMbincontent, intbincontent, BSMbincontent))
-        for name, content in itertools.chain(SMbincontent.iteritems(), intbincontent.iteritems(), BSMbincontent.iteritems()):
+        fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontent))
+        for name, content in itertools.chain(*(_.iteritems() for _ in bincontent)):
           thingtoprint += "\n"+fmt.format(name, content)
-        thingtoprint += "\n"+fmt.format("final SM", finalSMbincontent)
-        thingtoprint += "\n"+fmt.format("final int", finalintbincontent)
-        thingtoprint += "\n"+fmt.format("final BSM", finalBSMbincontent)
+        for name, content in itertools.izip(self.templatenames, finalbinconent):
+          thingtoprint += "\n"+fmt.format("final "+name, finalSMbincontent)
         printedbins.append(thingtoprint)
 
-      SM.SetBinContentError(x, y, z, SMfinalbincontent)
-      int.SetBinContentError(x, y, z, intfinalbincontent)
-      BSM.SetBinContentError(x, y, z, BSMfinalbincontent)
+      for t, content in itertools.izip(self.templates, finalbincontent):
+        t.SetBinContentError(x, y, z, content)
 
     if printedbins:
       print
       print "Bins you requested to print:"
       for _ in printedbins: print _
 
-    SM.finalize()
-    int.finalize()
-    BSM.finalize()
+    for _ in self.templates:
+      _.finalize()
 
     print
     print "final integrals:"
-    print "  SM  = {:10.3e}".format(SM.integral)
-    print "  BSM = {:10.3e}".format(BSM.integral)
-    print "  int = {:10.3e}".format(int.integral)
+    for name, t in itertools.izip(self.templatenames, self.templates):
+      print "  {:>10} = {:10.3e}".format(name, t.integral)
     print
+
+
+class OneParameterggH(ConstraintedTemplatesWithFit):
+  ntemplates = 3  #pure SM, interference, pure BSM
+  templatenames = "SM", "int", "BSM"
+  pureindices = 0, 2
+
+  @staticmethod
+  def constraint(x):
+    #|interference| <= 2*sqrt(SM*BSM)
+    #2*sqrt(SM*BSM) - |interference| >= 0
+    return np.array([2*(x[0]*x[2])**.5 - abs(x[1])])
+
+  def makeNLL(self, x0, sigma, nbincontents):
+    def negativeloglikelihood(x):
+      return sum(
+        (
+          ((x[0] - x0[0][i] ) / sigma[0][i] ) ** 2
+        + ((x[1] - x0[1][i]) / sigma[1][i]) ** 2
+        + ((x[2] - x0[2][i]) / sigma[2][i]) ** 2
+        ) for i in xrange(nbincontents)
+      )
+    return negativeloglikelihood
+
