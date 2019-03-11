@@ -1,4 +1,4 @@
-import abc, itertools
+import abc, itertools, warnings
 
 try:
   import autograd
@@ -7,7 +7,6 @@ except ImportError:
   import numpy as np
 else:
   import autograd.numpy as np
-
 
 from scipy import optimize
 if hasattr(optimize, "NonlinearConstraint"):
@@ -46,7 +45,6 @@ class ConstrainedTemplatesBase(object):
       binxyz = set(binxyz)
       if len(binxyz) != 1:
         raise ValueError("Templates have inconsistent binning")
-      print binxyz
       yield binxyz.pop()
 
 class OneTemplate(ConstrainedTemplatesBase):
@@ -150,9 +148,7 @@ class OneTemplate(ConstrainedTemplatesBase):
       print "Bins you requested to print:"
       for _ in printedbins: print _
 
-    template.doscale()
-    template.domirror()
-    template.dofloor()
+    template.finalize()
 
     print
     print "final integral = {:10.3e}".format(template.integral)
@@ -243,18 +239,18 @@ class OneParameterggH(ConstrainedTemplatesBase):
       def constraint(x):
         return np.array([2*(x[0]*x[2])**.5 - abs(x[1])])
       constraintjacobian = autograd.jacobian(constraint)
-      constrainthessian = autograd.hessian_vector_product(constraint)
+      constrainthessianv = autograd.linear_combination_of_hessians(constraint)
 
-      def constrainthessian(*args):
-        assert 0, args
-
-      nonlinearconstraint = optimize.NonlinearConstraint(constraint, 0, np.inf, constraintjacobian, constrainthessian)
+      nonlinearconstraint = optimize.NonlinearConstraint(constraint, np.finfo(np.float).eps, np.inf, constraintjacobian, constrainthessianv)
 
       linearconstraint = optimize.LinearConstraint([[1, 0, 0], [0, 0, 1]], [0, np.inf], [0, np.inf])
 
       startpoint = [weightedaverage(_.itervalues()).n for _ in SMbincontent, intbincontent, BSMbincontent]
+      if startpoint[0] == 0: startpoint[0] = np.finfo(np.float).eps
+      if startpoint[2] == 0: startpoint[2] = np.finfo(np.float).eps
+      print [x, y, z], startpoint
 
-      bounds = optimize.Bounds([0, -np.inf, 0], [np.inf]*3)
+      bounds = optimize.Bounds([np.finfo(float).eps, -np.inf, np.finfo(float).eps], [np.inf]*3)
 
       fitresult = optimize.minimize(
         negativeloglikelihood,
@@ -263,11 +259,14 @@ class OneParameterggH(ConstrainedTemplatesBase):
         jac=nlljacobian,
         hess=nllhessian,
         constraints=[nonlinearconstraint],
-        bounds=bounds
+        bounds=bounds,
+        options = {},
       )
 
-      if not fitresult.success:
-        raise RuntimeError("Fit failed with status {}.  Message:\n{}".format(fitresult.status, fitresult.message))
+      print fitresult
+
+      if fitresult.status != 0:
+        warnings.warn(RuntimeWarning("Fit failed with status {}.  Message:\n{}".format(fitresult.status, fitresult.message)))
 
       SMfinalbincontent, intfinalbincontent, BSMfinalbincontent = fitresult.x
 
@@ -290,10 +289,13 @@ class OneParameterggH(ConstrainedTemplatesBase):
       print "Bins you requested to print:"
       for _ in printedbins: print _
 
-    template.doscale()
-    template.domirror()
-    template.dofloor()
+    SM.finalize()
+    int.finalize()
+    BSM.finalize()
 
     print
-    print "final integral = {:10.3e}".format(template.integral)
+    print "final integrals:"
+    print "  SM  = {:10.3e}".format(SM.integral)
+    print "  BSM = {:10.3e}".format(BSM.integral)
+    print "  int = {:10.3e}".format(int.integral)
     print

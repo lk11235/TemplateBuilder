@@ -84,7 +84,7 @@ class Template(object):
     if self.finalized:
       raise RuntimeError("Can't set bin content after it's finalized")
     self.__h.SetBinContent(*args[:-1]+(uncertainties.nominal_value(args[-1]),))
-    self.__h.SetBinError(*args[:-1]+(uncertainties.std_dev(args[-1].s),))
+    self.__h.SetBinError(*args[:-1]+(uncertainties.std_dev(args[-1]),))
 
   def doscale(self):
     if self.__didscale: raise RuntimeError("Trying to scale twice!")
