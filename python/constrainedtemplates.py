@@ -35,11 +35,11 @@ class ConstrainedTemplatesBase(object):
   def templates(self): 
     return self.__templates
 
-  @abc.abstractproperty
-  def ntemplates(self): pass
+  @property
+  def ntemplates(self): return len(self.templatenames)
 
-  @abc.abstractmethod
-  def makefinaltemplates(self, printbins): pass
+  @abc.abstractproperty
+  def templatenames(self): "can be a class member, names of the templates in order (e.g. SM, int, BSM)"
 
   @property
   def binsxyz(self):
@@ -48,133 +48,6 @@ class ConstrainedTemplatesBase(object):
       if len(binxyz) != 1:
         raise ValueError("Templates have inconsistent binning")
       yield binxyz.pop()
-
-class OneTemplate(ConstrainedTemplatesBase):
-  ntemplates = 1
-
-  def makefinaltemplates(self, printbins):
-    template, = self.templates
-
-    printbins = tuple(tuple(_) for _ in printbins)
-    assert all(len(_) == 3 for _ in printbins)
-    print
-    print "Making the final template:"
-    print "  {:40} {:45}".format(template.printprefix, template.name)
-    print "from individual templates with integrals:"
-
-    for component in template.templatecomponents:
-      component.lock()
-      print "  {:45} {:10.3e}".format(component.name, component.integral)
-
-    outlierwarning = []
-    printedbins = []
-
-    for x, y, z in self.binsxyz:
-      bincontent = {}
-      for component in template.templatecomponents:
-        bincontent[component.name] = component.GetBinContentError(x, y, z)
-
-      namestoremove = set()
-
-      #remove outliers:
-      #first try to use all the templatecomponents, then try one, then two, etc.
-      for i in xrange(len(bincontent)-1):
-        significances = {}
-        #for each number: loop through the combinations of templatecomponents to possibly remove
-        for namestomayberemove in itertools.combinations(bincontent, i):
-          contentstomayberemove = tuple(bincontent[_] for _ in namestomayberemove)
-          for name, content in bincontent.iteritems():
-            #for each remaining templatecomponent, find the unbiased residual between its bin content
-            #and the bin content predicted by the other remaining components
-            if name in namestomayberemove: continue
-            newunbiasedresidual = (
-              content
-              - weightedaverage(othercontent
-                for othername, othercontent in bincontent.iteritems()
-                if othername != name and othername not in namestomayberemove
-              )
-            )
-            significance = abs(newunbiasedresidual.n) / newunbiasedresidual.s
-            #if there's a 3sigma difference, then this combination of templatecomponents to remove is no good
-            if significance > 3: break #out of the loop over remaining names
-          else:
-            #no remaining unbiased residuals are 3sigma
-            #that means this combination of templatecomponents is a candidate to remove
-            #if multiple combinations of the same number of templatecomponents fit this criterion,
-            #then we pick the one that itself has the biggest normalized residual from the other templatecomponents
-            #therefore we store it in significances
-            if contentstomayberemove:
-              unbiasedresidual = (
-                weightedaverage(contentstomayberemove)
-                - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername not in namestomayberemove)
-              )
-              significances[namestomayberemove] = abs(unbiasedresidual.n) / unbiasedresidual.s
-            else:
-              significances[namestomayberemove] = float("inf")
-
-        if significances:
-          nameswithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
-          namestoremove = nameswithmaxsignificance
-          break
-
-      if namestoremove:
-        outlierwarning.append("  {:3d} {:3d} {:3d}: {}".format(x, y, z, ", ".join(sorted(namestoremove))))
-      for name in namestoremove:
-        del bincontent[name]
-
-      if len(bincontent) < len(template.templatecomponents) / 2.:
-        raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:45} {:10.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in template.templatecomponents))
-
-      if all(_.n == _.s == 0 for _ in bincontent.itervalues()):  #special case, empty histogram
-        finalbincontent = bincontent.values()[0]
-      else:                                                      #normal case
-        finalbincontent = weightedaverage(bincontent.itervalues())
-
-      if (x, y, z) in printbins:
-        thingtoprint = "  {:3d} {:3d} {:3d}:".format(x, y, z)
-        fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
-        for name, content in bincontent.iteritems():
-          thingtoprint += "\n"+fmt.format(name, content)
-        thingtoprint += "\n"+fmt.format("final", finalbincontent)
-        printedbins.append(thingtoprint)
-
-      template.SetBinContentError(x, y, z, finalbincontent)
-
-    if outlierwarning:
-      print
-      print "Warning: there are outliers in some bins:"
-      for _ in outlierwarning: print _
-
-    if printedbins:
-      print
-      print "Bins you requested to print:"
-      for _ in printedbins: print _
-
-    template.finalize()
-
-    print
-    print "final integral = {:10.3e}".format(template.integral)
-    print
-
-class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
-  def __init__(self, *args, **kwargs):
-    super(ConstraintedTemplatesWithFit, self).__init__(*args, **kwargs)
-    if autograd is None:
-      raise ImportError("To use OneParameterggH, please install autograd.")
-    if not hasscipy:
-      raise ImportError("To use OneParameterggH, please install a newer scipy.")
-
-  @abc.abstractproperty
-  def templatenames(self): "can be a class member, names of the templates in order (e.g. SM, int, BSM)"
-
-  @abc.abstractmethod
-  def makeNLL(self, x0, sigma, nbincontents): pass
-
-  @abc.abstractmethod
-  def constraint(self, x): "can be static"
-
-  @abc.abstractmethod
-  def pureindices(self): "can be a class member"
 
   def makefinaltemplates(self, printbins):
     printbins = tuple(tuple(_) for _ in printbins)
@@ -185,93 +58,45 @@ class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
       print "  {:>10}: {:40} {:45}".format(name, _.printprefix, _.name)
     print "from individual templates with integrals:"
 
+    printedbins = []
+    warnings = []
+
     for _ in self.templates:
       for component in _.templatecomponents:
         component.lock()
         print "  {:45} {:10.3e}".format(component.name, component.integral)
 
-    printedbins = []
-
     for x, y, z in self.binsxyz:
-      bincontent = []
+      bincontents = []
       for _ in self.templates:
         thisonescontent = {}
-        bincontent.append(thisonescontent)
+        bincontents.append(thisonescontent)
         for component in _.templatecomponents:
           thisonescontent[component.name.replace(_.name, "")] = component.GetBinContentError(x, y, z)
 
-      nbincontents = len(bincontent[0])
+      assert len({frozenset(_) for _ in bincontents}) == 1  #they should all have the same keys
 
-      #Each template component produces a 3D probability distribution in (SM, int, BSM)
-      #FIXME: include correlations and don't approximate as Gaussian
+      finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents)
 
-      assert len({frozenset(_) for _ in bincontent}) == 1  #they should all have the same keys
-
-      x0 = [[] for t in self.templates]
-      sigma = [[] for t in self.templates]
-
-      for name in bincontent[0]:
-        for thisonescontent, thisx0, thissigma in itertools.izip(bincontent, x0, sigma):
-          thisx0.append(thisonescontent[name].n)
-          thissigma.append(thisonescontent[name].s)
-
-      x0 = [np.array(_) for _ in x0]
-      sigma = [np.array(_) for _ in sigma]
-
-      negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents)
-      nlljacobian = autograd.jacobian(negativeloglikelihood)
-      nllhessian = autograd.hessian(negativeloglikelihood)
-
-      constraint = self.constraint
-      constraintjacobian = autograd.jacobian(constraint)
-      constrainthessianv = autograd.linear_combination_of_hessians(constraint)
-
-      nonlinearconstraint = optimize.NonlinearConstraint(constraint, np.finfo(np.float).eps, np.inf, constraintjacobian, constrainthessianv)
-
-      bounds = optimize.Bounds(
-        [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
-        [np.inf for i in xrange(self.ntemplates)]
-      )
-
-      startpoint = [weightedaverage(_.itervalues()).n for _ in bincontent]
-      for i in self.pureindices:
-        if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
-      print [x, y, z], startpoint
-
-      fitresult = optimize.minimize(
-        negativeloglikelihood,
-        startpoint,
-        method='trust-constr',
-        jac=nlljacobian,
-        hess=nllhessian,
-        constraints=[nonlinearconstraint],
-        bounds=bounds,
-        options = {},
-      )
-
-      print fitresult
-
-      finalbincontent = fitresult.x
-
-      if fitresult.status != 0:
-        warnings.warn(RuntimeWarning("Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)))
-
+      printmessage = "  {:3d} {:3d} {:3d}:\n".format(x, y, z) + printmessage
       if (x, y, z) in printbins:
-        thingtoprint = "  {:3d} {:3d} {:3d}:".format(x, y, z)
-        fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontent))
-        for name, content in itertools.chain(*(_.iteritems() for _ in bincontent)):
-          thingtoprint += "\n"+fmt.format(name, content)
-        for name, content in itertools.izip(self.templatenames, finalbinconent):
-          thingtoprint += "\n"+fmt.format("final "+name, finalSMbincontent)
-        printedbins.append(thingtoprint)
+        printedbins.append(printmessage)
 
-      for t, content in itertools.izip(self.templates, finalbincontent):
+      if warning:
+        warnings.append("  {:3d} {:3d} {:3d}: "+warning)
+
+      for t, content in itertools.izip(self.templates, finalbincontents):
         t.SetBinContentError(x, y, z, content)
 
     if printedbins:
       print
       print "Bins you requested to print:"
       for _ in printedbins: print _
+
+    if warnings:
+      print
+      print "Warnings:"
+      for _ in warnings: print _
 
     for _ in self.templates:
       _.finalize()
@@ -283,8 +108,163 @@ class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
     print
 
 
+  @abc.abstractmethod
+  def computefinalbincontents(self, bincontents): pass
+
+class OneTemplate(ConstrainedTemplatesBase):
+  templatenames = "",
+  pureindices = 0, 2
+
+  def computefinalbincontents(self, bincontents):
+    namestoremove = set()
+    bincontent = bincontents[0]
+    nbincontents = len(bincontent)
+
+    #remove outliers:
+    #first try to use all the templatecomponents, then try one, then two, etc.
+    for i in xrange(len(bincontent)-1):
+      significances = {}
+      #for each number: loop through the combinations of templatecomponents to possibly remove
+      for namestomayberemove in itertools.combinations(bincontent, i):
+        contentstomayberemove = tuple(bincontent[_] for _ in namestomayberemove)
+        for name, content in bincontent.iteritems():
+          #for each remaining templatecomponent, find the unbiased residual between its bin content
+          #and the bin content predicted by the other remaining components
+          if name in namestomayberemove: continue
+          newunbiasedresidual = (
+            content
+            - weightedaverage(othercontent
+              for othername, othercontent in bincontent.iteritems()
+              if othername != name and othername not in namestomayberemove
+            )
+          )
+          significance = abs(newunbiasedresidual.n) / newunbiasedresidual.s
+          #if there's a 3sigma difference, then this combination of templatecomponents to remove is no good
+          if significance > 3: break #out of the loop over remaining names
+        else:
+          #no remaining unbiased residuals are 3sigma
+          #that means this combination of templatecomponents is a candidate to remove
+          #if multiple combinations of the same number of templatecomponents fit this criterion,
+          #then we pick the one that itself has the biggest normalized residual from the other templatecomponents
+          #therefore we store it in significances
+          if contentstomayberemove:
+            unbiasedresidual = (
+              weightedaverage(contentstomayberemove)
+              - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername not in namestomayberemove)
+            )
+            significances[namestomayberemove] = abs(unbiasedresidual.n) / unbiasedresidual.s
+          else:
+            significances[namestomayberemove] = float("inf")
+
+      if significances:
+        nameswithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
+        namestoremove = nameswithmaxsignificance
+        break
+
+    outlierwarning = None
+    if namestoremove:
+      outlierwarning = "there are outliers: " + ", ".join(sorted(namestoremove))
+    for name in namestoremove:
+      del bincontent[name]
+
+    if len(bincontent) < nbincontents / 2.:
+      raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:45} {:10.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in template.templatecomponents))
+
+    if all(_.n == _.s == 0 for _ in bincontent.itervalues()):  #special case, empty bin
+      finalbincontent = bincontent.values()[0]
+    else:                                                      #normal case
+      finalbincontent = weightedaverage(bincontent.itervalues())
+
+    thingtoprint = ""
+    fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+    for name, content in bincontent.iteritems():
+      thingtoprint += "\n"+fmt.format(name, content)
+    thingtoprint += "\n"+fmt.format("final", finalbincontent)
+
+    return [finalbincontent], thingtoprint, outlierwarning
+
+class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
+
+  def computefinalbincontents(self, bincontents):
+    nbincontents = len(bincontents[0])
+
+    #Each template component produces a 3D probability distribution in (SM, int, BSM)
+    #FIXME: include correlations and don't approximate as Gaussian
+
+    x0 = [[] for t in self.templates]
+    sigma = [[] for t in self.templates]
+
+    for name in bincontents[0]:
+      for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
+        thisx0.append(thisonescontent[name].n)
+        thissigma.append(thisonescontent[name].s)
+
+    x0 = [np.array(_) for _ in x0]
+    sigma = [np.array(_) for _ in sigma]
+
+    negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents)
+    nlljacobian = autograd.jacobian(negativeloglikelihood)
+    nllhessian = autograd.hessian(negativeloglikelihood)
+
+    constraint = self.constraint
+    constraintjacobian = autograd.jacobian(constraint)
+    constrainthessianv = autograd.linear_combination_of_hessians(constraint)
+
+    nonlinearconstraint = optimize.NonlinearConstraint(constraint, np.finfo(np.float).eps, np.inf, constraintjacobian, constrainthessianv)
+
+    bounds = optimize.Bounds(
+      [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
+      [np.inf for i in xrange(self.ntemplates)]
+    )
+
+    startpoint = [weightedaverage(_.itervalues()).n for _ in bincontents]
+    for i in self.pureindices:
+      if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
+
+    fitresult = optimize.minimize(
+      negativeloglikelihood,
+      startpoint,
+      method='trust-constr',
+      jac=nlljacobian,
+      hess=nllhessian,
+      constraints=[nonlinearconstraint],
+      bounds=bounds,
+      options = {},
+    )
+
+    print fitresult
+
+    finalbincontents = fitresult.x
+
+    if fitresult.status != 0:
+      warnings.warn(RuntimeWarning("Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)))
+
+    thingtoprint = ""
+    fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
+    for name, content in itertools.chain(*(_.iteritems() for _ in bincontents)):
+      thingtoprint += "\n"+fmt.format(name, content)
+    for name, content in itertools.izip(self.templatenames, finalbincontents):
+      thingtoprint += "\n"+fmt.format("final "+name, content)
+
+    return finalbincontents, thingtoprint, None
+
+  def __init__(self, *args, **kwargs):
+    super(ConstraintedTemplatesWithFit, self).__init__(*args, **kwargs)
+    if autograd is None:
+      raise ImportError("To use OneParameterggH, please install autograd.")
+    if not hasscipy:
+      raise ImportError("To use OneParameterggH, please install a newer scipy.")
+
+  @abc.abstractmethod
+  def makeNLL(self, x0, sigma, nbincontents): pass
+
+  @abc.abstractmethod
+  def constraint(self, x): "can be static"
+
+  @abc.abstractmethod
+  def pureindices(self): "can be a class member"
+
 class OneParameterggH(ConstraintedTemplatesWithFit):
-  ntemplates = 3  #pure SM, interference, pure BSM
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
 
@@ -304,4 +284,3 @@ class OneParameterggH(ConstraintedTemplatesWithFit):
         ) for i in xrange(nbincontents)
       )
     return negativeloglikelihood
-
