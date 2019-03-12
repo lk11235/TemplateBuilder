@@ -191,6 +191,7 @@ class OneTemplate(ConstrainedTemplatesBase):
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
   def computefinalbincontents(self, bincontents):
+    bincontents = bincontents[:]
     nbincontents = len(bincontents[0])
 
     #Each template component produces a 3D probability distribution in (SM, int, BSM)
@@ -201,6 +202,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     for name in bincontents[0]:
       for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
+        if thisonescontent[name].n == 0:
+          thisonescontent[name].std_dev = max(thisonescontent[othername].s for othername in thisonescontent)
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
 
