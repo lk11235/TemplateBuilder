@@ -14,13 +14,14 @@ if hasattr(optimize, "NonlinearConstraint"):
 else:
   hasscipy = False
 
-from moreuncertainties import weightedaverage
+from moremath import minimizequartic, weightedaverage
 
 
 def ConstrainedTemplates(constrainttype, templates):
   return {
     "unconstrained": OneTemplate,
     "oneparameterggH": OneParameterggH,
+    "oneparameterVVH": OneParameterVVH,
   }[constrainttype](templates)
 
 class ConstrainedTemplatesBase(object):
@@ -76,14 +77,18 @@ class ConstrainedTemplatesBase(object):
 
       assert len({frozenset(_) for _ in bincontents}) == 1  #they should all have the same keys
 
-      finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents)
+      try:
+        finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents)
+      except:
+        print "Error when finding content for bin", x, y, z
+        raise
 
       printmessage = "  {:3d} {:3d} {:3d}:\n".format(x, y, z) + printmessage
       if (x, y, z) in printbins:
         printedbins.append(printmessage)
 
       if warning:
-        warnings.append("  {:3d} {:3d} {:3d}: "+warning)
+        warnings.append("  {:3d} {:3d} {:3d}: ".format(x, y, z) + warning)
 
       for t, content in itertools.izip(self.templates, finalbincontents):
         t.SetBinContentError(x, y, z, content)
@@ -183,7 +188,7 @@ class OneTemplate(ConstrainedTemplatesBase):
 
     return [finalbincontent], thingtoprint, outlierwarning
 
-class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
+class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
   def computefinalbincontents(self, bincontents):
     nbincontents = len(bincontents[0])
@@ -210,7 +215,7 @@ class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
     constraintjacobian = autograd.jacobian(constraint)
     constrainthessianv = autograd.linear_combination_of_hessians(constraint)
 
-    nonlinearconstraint = optimize.NonlinearConstraint(constraint, np.finfo(np.float).eps, np.inf, constraintjacobian, constrainthessianv)
+    nonlinearconstraint = optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)
 
     bounds = optimize.Bounds(
       [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
@@ -236,8 +241,9 @@ class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
 
     finalbincontents = fitresult.x
 
+    warning = None
     if fitresult.status != 0:
-      warnings.warn(RuntimeWarning("Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)))
+      warning = "Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
@@ -246,10 +252,10 @@ class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
 
-    return finalbincontents, thingtoprint, None
+    return finalbincontents, thingtoprint, warning
 
   def __init__(self, *args, **kwargs):
-    super(ConstraintedTemplatesWithFit, self).__init__(*args, **kwargs)
+    super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
     if autograd is None:
       raise ImportError("To use OneParameterggH, please install autograd.")
     if not hasscipy:
@@ -260,11 +266,15 @@ class ConstraintedTemplatesWithFit(ConstrainedTemplatesBase):
 
   @abc.abstractmethod
   def constraint(self, x): "can be static"
+  @abc.abstractproperty
+  def constraintmin(self): "can be a class member"
+  @abc.abstractproperty
+  def constraintmax(self): "can be a class member"
 
-  @abc.abstractmethod
+  @abc.abstractproperty
   def pureindices(self): "can be a class member"
 
-class OneParameterggH(ConstraintedTemplatesWithFit):
+class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
 
@@ -274,13 +284,41 @@ class OneParameterggH(ConstraintedTemplatesWithFit):
     #2*sqrt(SM*BSM) - |interference| >= 0
     return np.array([2*(x[0]*x[2])**.5 - abs(x[1])])
 
+  constraintmin = np.finfo(np.float).eps
+  constraintmax = np.inf
+
   def makeNLL(self, x0, sigma, nbincontents):
     def negativeloglikelihood(x):
       return sum(
         (
-          ((x[0] - x0[0][i] ) / sigma[0][i] ) ** 2
+          ((x[0] - x0[0][i]) / sigma[0][i]) ** 2
         + ((x[1] - x0[1][i]) / sigma[1][i]) ** 2
         + ((x[2] - x0[2][i]) / sigma[2][i]) ** 2
         ) for i in xrange(nbincontents)
       )
     return negativeloglikelihood
+
+class OneParameterVVH(ConstrainedTemplatesWithFit):
+  templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
+  pureindices = 0, 4
+
+  @staticmethod
+  def constraint(x):
+    return np.array([minimizequartic(x)])
+
+  constraintmin = np.finfo(np.float).eps
+  constraintmax = np.inf
+
+  def makeNLL(self, x0, sigma, nbincontents):
+    def negativeloglikelihood(x):
+      return sum(
+        (
+          ((x[0] - x0[0][i]) / sigma[0][i]) ** 2
+        + ((x[1] - x0[1][i]) / sigma[1][i]) ** 2
+        + ((x[2] - x0[2][i]) / sigma[2][i]) ** 2
+        + ((x[3] - x0[3][i]) / sigma[3][i]) ** 2
+        + ((x[4] - x0[4][i]) / sigma[4][i]) ** 2
+        ) for i in xrange(nbincontents)
+      )
+    return negativeloglikelihood
+

@@ -6,7 +6,7 @@ from collections import Counter
 
 import uncertainties
 
-from moreuncertainties import weightedaverage
+from moremath import weightedaverage
 
 class Template(object):
   def __init__(
