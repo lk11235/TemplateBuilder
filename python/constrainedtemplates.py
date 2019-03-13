@@ -266,9 +266,9 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
     if autograd is None:
-      raise ImportError("To use OneParameterggH, please install autograd.")
+      raise ImportError("To use "+type(self).__name__+", please install autograd.")
     if not hasscipy:
-      raise ImportError("To use OneParameterggH, please install a newer scipy.")
+      raise ImportError("To use "+type(self).__name__+", please install a newer scipy.")
 
   @abc.abstractmethod
   def makeNLL(self, x0, sigma, nbincontents): pass
