@@ -7,7 +7,8 @@ if __name__ == "__main__":
   p = argparse.ArgumentParser()
   p.add_argument("configfile", nargs="+")
   p.add_argument("--print-bin", action="append", default=[], type=int, nargs=3)
+  p.add_argument("--print-all-bins", action="store_true")
   p.add_argument("--force", "-f", action="store_true")
   args = p.parse_args()
 
-  TemplateBuilder(*args.configfile, printbins=args.print_bin, force=args.force).maketemplates()
+  TemplateBuilder(*args.configfile, printbins=args.print_bin, printallbins=args.print_all_bins, force=args.force).maketemplates()

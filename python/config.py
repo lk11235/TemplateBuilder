@@ -226,6 +226,7 @@ class TemplateBuilder(object):
   def __init__(self, *filenames, **kwargs):
     self.__configs = [JsonReader(filename) for filename in filenames]
     self.__printbins = tuple(kwargs.pop("printbins", ()))
+    self.__printallbins = kwargs.pop("printallbins", False)
     self.__force = kwargs.pop("force", False)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
@@ -309,7 +310,7 @@ class TemplateBuilder(object):
           tree.fillall()
 
       for constraint in constraints:
-        constraint.makefinaltemplates(printbins=self.__printbins)
+        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins)
 
       for template in templates:
         if not template.finalized:

@@ -50,7 +50,7 @@ class ConstrainedTemplatesBase(object):
         raise ValueError("Templates have inconsistent binning")
       yield binxyz.pop()
 
-  def makefinaltemplates(self, printbins):
+  def makefinaltemplates(self, printbins, printallbins):
     printbins = tuple(tuple(_) for _ in printbins)
     assert all(len(_) == 3 for _ in printbins)
     print
@@ -86,6 +86,8 @@ class ConstrainedTemplatesBase(object):
       printmessage = "  {:3d} {:3d} {:3d}:\n".format(x, y, z) + printmessage
       if (x, y, z) in printbins:
         printedbins.append(printmessage)
+      if printallbins:
+        print printmessage
 
       if warning:
         warnings.append("  {:3d} {:3d} {:3d}: ".format(x, y, z) + warning)
@@ -225,33 +227,37 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       [np.inf for i in xrange(self.ntemplates)]
     )
 
-    startpoint = [weightedaverage(_.itervalues()).n for _ in bincontents]
+    startpoint = np.array([weightedaverage(_.itervalues()).n for _ in bincontents])
     for i in self.pureindices:
       if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
 
-    fitresult = optimize.minimize(
-      negativeloglikelihood,
-      startpoint,
-      method='trust-constr',
-      jac=nlljacobian,
-      hess=nllhessian,
-      constraints=[nonlinearconstraint],
-      bounds=bounds,
-      options = {},
-    )
+    if self.constraintmin <= constraint(startpoint) <= self.constraintmax:
+      fitresult = "no need for a fit - average already satisfies the constraint"
+      finalbincontents = startpoint
+      warning = None
+    else:
+      fitresult = optimize.minimize(
+        negativeloglikelihood,
+        startpoint,
+        method='trust-constr',
+        jac=nlljacobian,
+        hess=nllhessian,
+        constraints=[nonlinearconstraint],
+        bounds=bounds,
+        options = {},
+      )
 
-    print fitresult
+      finalbincontents = fitresult.x
 
-    finalbincontents = fitresult.x
-
-    warning = None
-    if fitresult.status != 0:
-      warning = "Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)
+      warning = None
+      if fitresult.status != 0:
+        warning = "Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
     for name, content in itertools.chain(*(_.iteritems() for _ in bincontents)):
       thingtoprint += "\n"+fmt.format(name, content)
+    thingtoprint += "\n\n"+str(fitresult)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
 
