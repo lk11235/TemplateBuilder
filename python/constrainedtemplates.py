@@ -265,34 +265,40 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       finalbincontents = startpoint
       warning = None
     else:
-      fitresult = optimize.minimize(
-        negativeloglikelihood,
-        startpoint,
-        method='trust-constr',
-        jac=nlljacobian,
-        hess=nllhessian,
-        constraints=[nonlinearconstraint],
-        bounds=bounds,
-        options = {},
-      )
+      try:
+        fitresult = optimize.minimize(
+          negativeloglikelihood,
+          startpoint,
+          method='trust-constr',
+          jac=nlljacobian,
+          hess=nllhessian,
+          constraints=[nonlinearconstraint],
+          bounds=bounds,
+          options = {},
+        )
+      except:
+        print "Error when doing fit.  Starting point was:"
+        print startpoint
+        raise
 
-      fitprintmessage = "fit starting from:\n\n{}\nresult:\n\n{}".format(startpoint, fitresult)
+      fitprintmessage = "fit starting from:\n{}\n\nresult:\n\n{}".format(startpoint, fitresult)
 
       finalbincontents = fitresult.x
 
-      warning = None
-      if fitresult.status != 0:
-        warning = "Fit gave status {}.  Message:\n{}".format(fitresult.status, fitresult.message)
+      warning = "fit converged with NLL = {}".format(fitresult.fun)
+      if fitresult.status not in (1, 2): warning += "\n"+fitresult.message
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
-    for name, content in itertools.chain(*(_.iteritems() for _ in bincontents)):
-      thingtoprint += "\n"+fmt.format(name, content)
+    for t, thisonescontent in itertools.izip(self.templates, bincontents):
+      thingtoprint += "\n"+t.name+":"
+      for name, content in sorted(thisonescontent.iteritems()):
+        thingtoprint += "\n"+fmt.format(name, content)
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
 
-    return finalbincontents, thingtoprint, warning
+    return finalbincontents, thingtoprint.lstrip("\n"), warning
 
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
