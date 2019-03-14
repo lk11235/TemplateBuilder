@@ -66,10 +66,18 @@ class Template(object):
   def name(self): return self.__name
   @property
   def printprefix(self): return self.__printprefix
+  @property
+  def mirrortype(self): return self.__mirrortype
 
   @property
+  def xbins(self): return self.__xbins
+  @property
+  def ybins(self): return self.__ybins
+  @property
+  def zbins(self): return self.__zbins
+  @property
   def binsxyz(self):
-    return itertools.product(xrange(1, self.__xbins+1), xrange(1, self.__ybins+1), xrange(1, self.__zbins+1))
+    return itertools.product(xrange(1, self.xbins+1), xrange(1, self.ybins+1), xrange(1, self.zbins+1))
 
   @property
   def integral(self):
@@ -91,20 +99,15 @@ class Template(object):
     self.__didscale = True
     self.__h.Scale(self.__scaleby)
 
-  def domirror(self):
+  def checkmirror(self):
     if self.__didmirror: raise RuntimeError("Trying to mirror twice!")
     self.__didmirror = True
     if self.__mirrortype is None: return
     for x, y, z in self.binsxyz:
-      if y > self.__ybins / 2: continue
+      if y > self.ybins / 2: continue
       sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
-      newbincontent = weightedaverage((
-        self.GetBinContentError(x, y, z),
-        sign * self.GetBinContentError(x, self.__ybins+1-y, z),
-      ))
-
-      self.SetBinContentError(x, y, z, newbincontent)
-      self.SetBinContentError(x, self.__ybins+1-y, z, sign*newbincontent)
+      if self.GetBinContentError(x, y, z) != sign*self.GetBinContentError(x, self.ybins+1-y, z):
+        raise RuntimeError("Mirror didn't happen: {} {}".format(self.GetBinContentError(x, y, z), self.GetBinContentError(x, self.ybins+1-y, z)))
 
   def dofloor(self):
     if self.__didfloor: raise RuntimeError("Trying to floor twice!")
@@ -133,9 +136,9 @@ class Template(object):
 
   def finalize(self):
     self.doscale()
-    self.domirror()
     self.dofloor()
     self.__finalized = True
+    self.checkmirror()
     self.__h.SetDirectory(self.__tdirectory)
 
   @property

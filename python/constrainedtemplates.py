@@ -14,6 +14,8 @@ if hasattr(optimize, "NonlinearConstraint"):
 else:
   hasscipy = False
 
+from uncertainties import ufloat
+
 from moremath import minimizequartic, weightedaverage
 
 
@@ -50,6 +52,38 @@ class ConstrainedTemplatesBase(object):
         raise ValueError("Templates have inconsistent binning")
       yield binxyz.pop()
 
+  @property
+  def xbins(self):
+    result = {t.xbins for t in self.templates}
+    assert len(result) == 1
+    return result.pop()
+
+  @property
+  def ybins(self):
+    result = {t.ybins for t in self.templates}
+    assert len(result) == 1
+    return result.pop()
+
+  @property
+  def zbins(self):
+    result = {t.zbins for t in self.templates}
+    assert len(result) == 1
+    return result.pop()
+
+  def getcomponentbincontents(self, x, y, z):
+      bincontents = []
+
+      for _ in self.templates:
+        thisonescontent = {}
+        bincontents.append(thisonescontent)
+        for component in _.templatecomponents:
+          thisonescontent[component.name.replace(_.name+"_", "")] = component.GetBinContentError(x, y, z)
+          if _.mirrortype is not None:
+            sign = {"symmetric": 1, "antisymmetric": -1}[_.mirrortype]
+            thisonescontent[component.name.replace(_.name+"_", "")+"_mirror"] = sign*component.GetBinContentError(x, self.ybins+1-y, z)
+
+      return bincontents
+
   def makefinaltemplates(self, printbins, printallbins):
     printbins = tuple(tuple(_) for _ in printbins)
     assert all(len(_) == 3 for _ in printbins)
@@ -68,12 +102,7 @@ class ConstrainedTemplatesBase(object):
         print "  {:45} {:10.3e}".format(component.name, component.integral)
 
     for x, y, z in self.binsxyz:
-      bincontents = []
-      for _ in self.templates:
-        thisonescontent = {}
-        bincontents.append(thisonescontent)
-        for component in _.templatecomponents:
-          thisonescontent[component.name.replace(_.name, "")] = component.GetBinContentError(x, y, z)
+      bincontents = self.getcomponentbincontents(x, y, z)
 
       assert len({frozenset(_) for _ in bincontents}) == 1  #they should all have the same keys
 
@@ -205,7 +234,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     for name in bincontents[0]:
       for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
         if thisonescontent[name].n == 0:
-          thisonescontent[name].std_dev = max(thisonescontent[othername].s for othername in thisonescontent)
+          thisonescontent[name] = ufloat(0, max(thisonescontent[othername].s for othername in thisonescontent))
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
 
@@ -232,7 +261,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
 
     if self.constraintmin <= constraint(startpoint) <= self.constraintmax:
-      fitresult = "no need for a fit - average already satisfies the constraint"
+      fitprintmessage = "no need for a fit - average already satisfies the constraint"
       finalbincontents = startpoint
       warning = None
     else:
@@ -247,6 +276,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         options = {},
       )
 
+      fitprintmessage = "fit starting from:\n\n{}\nresult:\n\n{}".format(startpoint, fitresult)
+
       finalbincontents = fitresult.x
 
       warning = None
@@ -257,7 +288,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
     for name, content in itertools.chain(*(_.iteritems() for _ in bincontents)):
       thingtoprint += "\n"+fmt.format(name, content)
-    thingtoprint += "\n\n"+str(fitresult)+"\n"
+    thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
 
