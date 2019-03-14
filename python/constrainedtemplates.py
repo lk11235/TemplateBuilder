@@ -1,4 +1,4 @@
-import abc, itertools, warnings
+import abc, itertools, textwrap
 
 try:
   import autograd
@@ -235,7 +235,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
         if thisonescontent[name].n == 0:
           thisonescontent[name] = ufloat(0, max(othercontent.s for othercontent in thisonescontent.itervalues()))
-        elif thisonescontent[name].s / thisonescontent[name].n > 0.99:
+        elif thisonescontent[name].s / abs(thisonescontent[name].n) > 0.99:
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
@@ -267,10 +267,11 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       finalbincontents = startpoint
       warning = None
     else:
+      fitstartpoint = self.adjuststartpoint(startpoint, constraint)
       try:
         fitresult = optimize.minimize(
           negativeloglikelihood,
-          startpoint,
+          fitstartpoint,
           method='trust-constr',
           jac=nlljacobian,
           hess=nllhessian,
@@ -284,7 +285,15 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         print sigma
         raise
 
-      fitprintmessage = "fit starting from:\n{}\nerrors:\n{}\n\nresult:\n\n{}".format(startpoint, sigma, fitresult)
+      fitprintmessage = textwrap.dedent("""
+        weighted averages:
+        {}
+        adjust to constraint --> fit starting from:
+        {}
+
+        result:
+        {}
+      """).format(startpoint, fitstartpoint, fitresult).strip()
 
       finalbincontents = fitresult.x
 
@@ -302,6 +311,24 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       thingtoprint += "\n"+fmt.format("final "+name, content)
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
+
+  def adjuststartpoint(self, startpoint, constraint):
+    assert len(constraint(startpoint)) == 1
+    assert constraint(startpoint) < 0
+    #we want to adjust the start point in a reasonable way so that it fills the constraint
+    #the simple way to do this is to increase the pure components by some factor
+    increasepureindices = np.array([1 if i in self.pureindices else 0 for i, _ in enumerate(startpoint)])
+    def functiontosolvefor0(x):
+      return constraint(startpoint * (increasepureindices*x + 1))
+    assert functiontosolvefor0(0) < 0
+
+    for x in itertools.count(0):
+      if functiontosolvefor0(x) > 0:
+        break
+
+    result = optimize.newton(functiontosolvefor0, x-0.5, fprime=autograd.grad(functiontosolvefor0), fprime2=autograd.grad(autograd.grad(functiontosolvefor0)))
+
+    return startpoint * (increasepureindices*result + 1)
 
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
