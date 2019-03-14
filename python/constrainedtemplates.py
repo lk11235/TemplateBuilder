@@ -233,9 +233,15 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     for name in bincontents[0]:
       for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
-        if thisonescontent[name].n == 0:
-          thisonescontent[name] = ufloat(0, max(othercontent.s for othercontent in thisonescontent.itervalues()))
-        elif thisonescontent[name].s / abs(thisonescontent[name].n) > 0.99:
+        if (
+          thisonescontent[name].n == 0
+          or (
+            thisonescontent[name].s / abs(thisonescontent[name].n) > 0.6
+            and all(othercontent.n == 0 for othername, othercontent in thisonescontent.iteritems() if othername != name)
+          )
+        ):
+          thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues()))
+        elif thisonescontent[name].s / abs(thisonescontent[name].n) > 0.6:
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
@@ -280,8 +286,9 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
           options = {},
         )
       except:
-        print "Error when doing fit.  Starting point and errors were:"
+        print "Error when doing fit.  Starting point, central values, and errors were:"
         print startpoint
+        print x0
         print sigma
         raise
 
