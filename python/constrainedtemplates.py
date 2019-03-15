@@ -230,14 +230,20 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     for name in bincontents[0]:
       for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
         if (
-          thisonescontent[name].n == 0
-          or (
-            thisonescontent[name].s / abs(thisonescontent[name].n) > 0.6
+          thisonescontent[name].n == 0    #0 content - maginfy error to the maximum error
+          or (                            #large relative error and this is the only nonzero one - same
+            thisonescontent[name].s / abs(thisonescontent[name].n) > 0.5
             and all(othercontent.n == 0 for othername, othercontent in thisonescontent.iteritems() if othername != name)
           )
         ):
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues()))
-        elif thisonescontent[name].s / abs(thisonescontent[name].n) > 0.6:
+        elif (
+          thisonescontent[name].s / abs(thisonescontent[name].n) > 0.5  #large relative error - magnify error to the maximum error considering only the ones with nonzero content
+          or (  #largeish relative error, but 5sigma away from the weighted average of the rest
+            thisonescontent[name].s / abs(thisonescontent[name].n) > 0.1
+            and abs(thisonescontent[name] - weightedaverage(othercontent for othername, othercontent in thisonescontent.iteritems() if othername != name)).n / thisonescontent[name].s > 5
+          )
+        ):
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
