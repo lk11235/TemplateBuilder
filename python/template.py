@@ -30,6 +30,7 @@ class Template(object):
         yformula, ybins, ymin, ymax,
         zformula, zbins, zmin, zmax,
         cutformula, weightformula,
+        mirrortype,
       )
       for i, tree in enumerate(trees)
     ]
@@ -60,7 +61,7 @@ class Template(object):
 
     self.__floor = floor
 
-    self.__finalized = self.__didscale = self.__didmirror = self.__didfloor = False
+    self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = False
 
   @property
   def name(self): return self.__name
@@ -100,12 +101,12 @@ class Template(object):
     self.__h.Scale(self.__scaleby)
 
   def checkmirror(self):
-    if self.__didmirror: raise RuntimeError("Trying to mirror twice!")
-    self.__didmirror = True
+    if self.__dicheckmirror: raise RuntimeError("Trying to mirror twice!")
+    self.__dicheckmirror = True
     if self.__mirrortype is None: return
+    sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
     for x, y, z in self.binsxyz:
       if y > self.ybins / 2: continue
-      sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
       if self.GetBinContentError(x, y, z) != sign*self.GetBinContentError(x, self.ybins+1-y, z):
         raise RuntimeError("Mirror didn't happen: {} {}".format(self.GetBinContentError(x, y, z), self.GetBinContentError(x, self.ybins+1-y, z)))
 

@@ -17,6 +17,7 @@ class TemplateComponent(object):
     ytreeformula, ybins, ymin, ymax,
     ztreeformula, zbins, zmin, zmax,
     cuttreeformula, weighttreeformula,
+    mirrortype,
   ):
     self.__name = name
     self.__printprefix = printprefix
@@ -62,6 +63,9 @@ class TemplateComponent(object):
     self.__ybins = ybins
     self.__zbins = zbins
 
+    self.__mirrortype = mirrortype
+    if mirrortype is not None: assert ymin == -ymax and ybins%2 == 0
+
     self.__locked = False
 
   @staticmethod
@@ -89,6 +93,11 @@ class TemplateComponent(object):
       weight = self.weight()
       self.__h.Fill(binx, biny, binz, weight)
       self.__habs.Fill(binx, biny, binz, abs(weight))
+
+      if self.__mirrortype is not None:
+        sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
+        self.__h.Fill(binx, -biny, binz, sign*weight)
+        self.__habs.Fill(binx, -biny, binz, abs(weight))
 
   @property
   def integral(self):

@@ -78,9 +78,6 @@ class ConstrainedTemplatesBase(object):
         bincontents.append(thisonescontent)
         for component in _.templatecomponents:
           thisonescontent[component.name.replace(_.name+"_", "")] = component.GetBinContentError(x, y, z)
-          if _.mirrortype is not None:
-            sign = {"symmetric": 1, "antisymmetric": -1}[_.mirrortype]
-            thisonescontent[component.name.replace(_.name+"_", "")+"_mirror"] = sign*component.GetBinContentError(x, self.ybins+1-y, z)
 
       return bincontents
 
