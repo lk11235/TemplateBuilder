@@ -217,7 +217,6 @@ class OneTemplate(ConstrainedTemplatesBase):
     return [finalbincontent], thingtoprint, outlierwarning
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
-
   def computefinalbincontents(self, bincontents):
     bincontents = bincontents[:]
     nbincontents = len(bincontents[0])
@@ -265,11 +264,28 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     for i in self.pureindices:
       if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
 
+    thingtoprint = ""
+    fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
+    for t, thisonescontent in itertools.izip(self.templates, bincontents):
+      thingtoprint += "\n"+t.name+":"
+      for name, content in sorted(thisonescontent.iteritems()):
+        thingtoprint += "\n"+fmt.format(name, content)
+
     if self.constraintmin <= constraint(startpoint) <= self.constraintmax:
       fitprintmessage = "no need for a fit - average already satisfies the constraint"
       finalbincontents = startpoint
       warning = None
     else:
+      fitprintmessage = textwrap.dedent("""
+        weighted averages:
+        {}
+        adjust to constraint --> fit starting from:
+        {}
+
+        result:
+        {}
+      """)
+
       fitstartpoint = self.adjuststartpoint(startpoint, constraint)
       try:
         fitresult = optimize.minimize(
@@ -283,33 +299,16 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
           options = {},
         )
       except:
-        print "Error when doing fit.  Starting point, central values, and errors were:"
-        print startpoint
-        print x0
-        print sigma
+        print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, "")
         raise
 
-      fitprintmessage = textwrap.dedent("""
-        weighted averages:
-        {}
-        adjust to constraint --> fit starting from:
-        {}
-
-        result:
-        {}
-      """).format(startpoint, fitstartpoint, fitresult).strip()
+      fitprintmessage = fitprintmessage.format(startpoint, fitstartpoint, fitresult).strip()
 
       finalbincontents = fitresult.x
 
       warning = "fit converged with NLL = {}".format(fitresult.fun)
       if fitresult.status not in (1, 2): warning += "\n"+fitresult.message
 
-    thingtoprint = ""
-    fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
-    for t, thisonescontent in itertools.izip(self.templates, bincontents):
-      thingtoprint += "\n"+t.name+":"
-      for name, content in sorted(thisonescontent.iteritems()):
-        thingtoprint += "\n"+fmt.format(name, content)
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
