@@ -91,6 +91,10 @@ class TemplateComponent(object):
       biny = self.biny()
       binz = self.binz()
       weight = self.weight()
+
+      if self.__mirrortype is not None:
+        weight /= 2
+
       self.__h.Fill(binx, biny, binz, weight)
       self.__habs.Fill(binx, biny, binz, abs(weight))
 

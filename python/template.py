@@ -107,8 +107,8 @@ class Template(object):
     sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
     for x, y, z in self.binsxyz:
       if y > self.ybins / 2: continue
-      if self.GetBinContentError(x, y, z) != sign*self.GetBinContentError(x, self.ybins+1-y, z):
-        raise RuntimeError("Mirror didn't happen: {} {}".format(self.GetBinContentError(x, y, z), self.GetBinContentError(x, self.ybins+1-y, z)))
+      if (self.GetBinContentError(x, y, z).n, self.GetBinContentError(x, y, z).s) != (sign*self.GetBinContentError(x, self.ybins+1-y, z).n, self.GetBinContentError(x, self.ybins+1-y, z).s):
+        raise RuntimeError("Mirror didn't happen: ({}, {}, {}) {} {}".format(x, y, z, self.GetBinContentError(x, y, z), self.GetBinContentError(x, self.ybins+1-y, z)))
 
   def dofloor(self):
     if self.__didfloor: raise RuntimeError("Trying to floor twice!")
