@@ -98,7 +98,9 @@ class Template(object):
   def doscale(self):
     if self.__didscale: raise RuntimeError("Trying to scale twice!")
     self.__didscale = True
-    self.__h.Scale(self.__scaleby)
+    #in principle can implement per-bin errors d(scaleby*bincontent)
+    assert uncertainties.std_dev(self.__scaleby) == 0
+    self.__h.Scale(uncertainties.nominal_value(self.__scaleby))
 
   def checkmirror(self):
     if self.__dicheckmirror: raise RuntimeError("Trying to mirror twice!")

@@ -144,6 +144,15 @@ class ConstrainedTemplatesBase(object):
   @abc.abstractmethod
   def computefinalbincontents(self, bincontents): pass
 
+  def applymirrortoarray(self, array):
+    if len(self.templates) != len(array):
+      raise ValueError("array should have length {}".format(len(self.templates)))
+    return np.array([
+      {"symmetric": 1, "antisymmetric": -1}[t.mirrortype] * s
+      for t, s in itertools.izip(self.templates, array)
+    ])
+
+
 class OneTemplate(ConstrainedTemplatesBase):
   templatenames = "",
   pureindices = 0, 2
@@ -218,6 +227,8 @@ class OneTemplate(ConstrainedTemplatesBase):
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def computefinalbincontents(self, bincontents):
+    warning = []
+
     bincontents = bincontents[:]
     nbincontents = len(bincontents[0])
 
@@ -228,7 +239,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     sigma = [[] for t in self.templates]
 
     for name in bincontents[0]:
-      for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
+      for thisonescontent, thisx0, thissigma, t in itertools.izip(bincontents, x0, sigma, self.templates):
         if (
           thisonescontent[name].n == 0    #0 content - maginfy error to the maximum error
           or (                            #large relative error and this is the only nonzero one - same
@@ -239,11 +250,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues()))
         elif (
           thisonescontent[name].s / abs(thisonescontent[name].n) > 0.5  #large relative error - magnify error to the maximum error considering only the ones with nonzero content
-          or (  #largeish relative error, but 5sigma away from the weighted average of the rest
-            thisonescontent[name].s / abs(thisonescontent[name].n) > 0.1
-            and abs(thisonescontent[name] - weightedaverage(othercontent for othername, othercontent in thisonescontent.iteritems() if othername != name)).n / thisonescontent[name].s > 5
-          )
         ):
+          thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
+        elif (  #largeish relative error, but 5sigma away from the weighted average of the rest
+          thisonescontent[name].s / abs(thisonescontent[name].n) > 0.1
+          and len(thisonescontent) > 1
+          and abs(thisonescontent[name] - weightedaverage(othercontent for othername, othercontent in thisonescontent.iteritems() if othername != name)).n / thisonescontent[name].s > 5
+        ):
+          warning.append(name + " is 5sigma away from the others for " + t.name + ", inflating its error")
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
@@ -280,7 +294,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     if self.constraintmin <= constraint(startpoint) <= self.constraintmax:
       fitprintmessage = "no need for a fit - average already satisfies the constraint"
       finalbincontents = startpoint
-      warning = None
     else:
       fitprintmessage = textwrap.dedent("""
         weighted averages:
@@ -294,16 +307,27 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
       fitstartpoint = self.adjuststartpoint(startpoint, constraint)
       try:
-        fitresult = optimize.minimize(
-          negativeloglikelihood,
-          fitstartpoint,
-          method='trust-constr',
-          jac=nlljacobian,
-          hess=nllhessian,
-          constraints=[nonlinearconstraint],
-          bounds=bounds,
-          options = {},
-        )
+        if tuple(fitstartpoint) not in self.__fitresultscache:
+          fitresult = self.__fitresultscache[tuple(fitstartpoint)] = optimize.minimize(
+            negativeloglikelihood,
+            fitstartpoint,
+            method='trust-constr',
+            jac=nlljacobian,
+            hess=nllhessian,
+            constraints=[nonlinearconstraint],
+            bounds=bounds,
+            options = {},
+          )
+          if all(t.mirrortype for t in self.templates):
+            mirroredstartpoint = self.applymirrortoarray(fitstartpoint)
+            self.__fitresultscache[tuple(mirroredstartpoint)] = optimize.OptimizeResult(
+              x=self.applymirrortoarray(fitresult.x),
+              fun=fitresult.fun,
+              message="(mirrored) "+fitresult.message,
+              status=fitresult.status,
+            )
+        fitresult = self.__fitresultscache[tuple(fitstartpoint)]
+
       except:
         print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, "")
         raise
@@ -312,12 +336,15 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
       finalbincontents = fitresult.x
 
-      warning = "fit converged with NLL = {}".format(fitresult.fun)
-      if fitresult.status not in (1, 2): warning += "\n"+fitresult.message
+      warning.append("fit converged with NLL = {}".format(fitresult.fun))
+      if fitresult.status not in (1, 2): warning.append(fitresult.message)
 
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
+
+    warning = "\n".join(warning)
+    if not warning: warning = None
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
 
@@ -345,6 +372,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       raise ImportError("To use "+type(self).__name__+", please install autograd.")
     if not hasscipy:
       raise ImportError("To use "+type(self).__name__+", please install a newer scipy.")
+    self.__fitresultscache = {}
 
   @abc.abstractmethod
   def makeNLL(self, x0, sigma, nbincontents): pass
