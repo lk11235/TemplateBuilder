@@ -177,11 +177,11 @@ class ConstrainedTemplatesBase(object):
               if othername != name and othername not in namestomayberemove
             )
           )
-          significance = abs(newunbiasedresidual.n) / newunbiasedresidual.s
-          #if there's a 3sigma difference, then this combination of templatecomponents to remove is no good
-          if significance > 3: break #out of the loop over remaining names
+          significance = abs(newunbiasedresidual.n) / content.s
+          #if there's a 5sigma difference, then this combination of templatecomponents to remove is no good
+          if significance > 5: break #out of the loop over remaining names
         else:
-          #no remaining unbiased residuals are 3sigma
+          #no remaining unbiased residuals are 5sigma
           #that means this combination of templatecomponents is a candidate to remove
           #if multiple combinations of the same number of templatecomponents fit this criterion,
           #then we pick the one that itself has the biggest normalized residual from the other templatecomponents
@@ -191,7 +191,7 @@ class ConstrainedTemplatesBase(object):
               weightedaverage(contentstomayberemove)
               - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername not in namestomayberemove)
             )
-            significances[namestomayberemove] = abs(unbiasedresidual.n) / unbiasedresidual.s
+            significances[namestomayberemove] = abs(unbiasedresidual.n) / weightedaverage(contentstomayberemove).s
           else:
             significances[namestomayberemove] = float("inf")
 
@@ -254,15 +254,11 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if (
           bincontent[name].n == 0    #0 content - maginfy error to the maximum error
           or (                            #large relative error and this is the only nonzero one - same
-            bincontent[name].s / abs(bincontent[name].n) > 0.5
+            bincontent[name].s == abs(bincontent[name].n)
             and all(othercontent.n == 0 for othername, othercontent in bincontent.iteritems() if othername != name)
           )
         ):
           bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues()))
-        elif (
-          bincontent[name].s / abs(bincontent[name].n) > 0.5  #large relative error - magnify error to the maximum error considering only the ones with nonzero content
-        ):
-          bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues() if othercontent.n != 0))
 
       outliers = self.findoutliers(bincontent)
       if outliers:
@@ -316,7 +312,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         weighted averages:
         {}
         adjust to constraint --> fit starting from:
-        {}
+        {} (NLL = {})
 
         result:
         {}
@@ -346,10 +342,10 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         fitresult = self.__fitresultscache[tuple(fitstartpoint)]
 
       except:
-        print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, "")
+        print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), "")
         raise
 
-      fitprintmessage = fitprintmessage.format(startpoint, fitstartpoint, fitresult).strip()
+      fitprintmessage = fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), fitresult).strip()
 
       finalbincontents = fitresult.x
 
