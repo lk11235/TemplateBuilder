@@ -284,11 +284,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     nonlinearconstraint = optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)
 
-    bounds = optimize.Bounds(
-      [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
-      [np.inf for i in xrange(self.ntemplates)]
-    )
-
     startpoint = np.array([weightedaverage(_.itervalues()).n for _ in bincontents])
     for i in self.pureindices:
       if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
@@ -319,6 +314,12 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       """)
 
       fitstartpoint = self.adjuststartpoint(startpoint, constraint)
+
+      bounds = optimize.Bounds(
+        [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
+        [2*_ if i in self.pureindices else np.inf for i, _ in enumerate(fitstartpoint)]
+      )
+
       try:
         if tuple(fitstartpoint) not in self.__fitresultscache:
           fitresult = self.__fitresultscache[tuple(fitstartpoint)] = optimize.minimize(
