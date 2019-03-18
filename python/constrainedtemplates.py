@@ -116,7 +116,11 @@ class ConstrainedTemplatesBase(object):
         print printmessage
 
       if warning:
-        warnings.append("  {:3d} {:3d} {:3d}: ".format(x, y, z) + warning)
+        if isinstance(warning, basestring):
+          warning = [warning]
+        else:
+          warning = list(warning)
+        warnings.append("\n      ".join(["  {:3d} {:3d} {:3d}: ".format(x, y, z)]+warning))
 
       for t, content in itertools.izip(self.templates, finalbincontents):
         t.SetBinContentError(x, y, z, content)
@@ -203,9 +207,9 @@ class OneTemplate(ConstrainedTemplatesBase):
         namestoremove = nameswithmaxsignificance
         break
 
-    outlierwarning = None
+    warning = []
     if namestoremove:
-      outlierwarning = "there are outliers: " + ", ".join(sorted(namestoremove))
+      warning.append("there are outliers: " + ", ".join(sorted(namestoremove)))
     for name in namestoremove:
       del bincontent[name]
 
@@ -223,13 +227,14 @@ class OneTemplate(ConstrainedTemplatesBase):
       thingtoprint += "\n"+fmt.format(name, content)
     thingtoprint += "\n"+fmt.format("final", finalbincontent)
 
-    return [finalbincontent], thingtoprint, outlierwarning
+    return [finalbincontent], thingtoprint, warning
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def computefinalbincontents(self, bincontents):
     warning = []
 
     bincontents = bincontents[:]
+    rawbincontents = bincontents[:]
     nbincontents = len(bincontents[0])
 
     #Each template component produces a 3D probability distribution in (SM, int, BSM)
@@ -239,7 +244,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     sigma = [[] for t in self.templates]
 
     for name in bincontents[0]:
-      for thisonescontent, thisx0, thissigma, t in itertools.izip(bincontents, x0, sigma, self.templates):
+      for thisonescontent, thisonesrawcontent, thisx0, thissigma, t in itertools.izip(bincontents, rawbincontents, x0, sigma, self.templates):
         if (
           thisonescontent[name].n == 0    #0 content - maginfy error to the maximum error
           or (                            #large relative error and this is the only nonzero one - same
@@ -255,7 +260,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         elif (  #largeish relative error, but 5sigma away from the weighted average of the rest
           thisonescontent[name].s / abs(thisonescontent[name].n) > 0.1
           and len(thisonescontent) > 1
-          and abs(thisonescontent[name] - weightedaverage(othercontent for othername, othercontent in thisonescontent.iteritems() if othername != name)).n / thisonescontent[name].s > 5
+          and abs(thisonescontent[name] - weightedaverage(othercontent for othername, othercontent in thisonesrawcontent.iteritems() if othername != name)).n / thisonescontent[name].s > 5
         ):
           warning.append(name + " is 5sigma away from the others for " + t.name + ", inflating its error")
           thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
@@ -342,9 +347,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
       thingtoprint += "\n"+fmt.format("final "+name, content)
-
-    warning = "\n".join(warning)
-    if not warning: warning = None
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
 
