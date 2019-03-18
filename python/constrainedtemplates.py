@@ -1,4 +1,4 @@
-import abc, itertools, textwrap
+import abc, copy, itertools, textwrap
 
 try:
   import autograd
@@ -156,15 +156,8 @@ class ConstrainedTemplatesBase(object):
       for t, s in itertools.izip(self.templates, array)
     ])
 
-
-class OneTemplate(ConstrainedTemplatesBase):
-  templatenames = "",
-  pureindices = 0, 2
-
-  def computefinalbincontents(self, bincontents):
-    namestoremove = set()
-    bincontent = bincontents[0]
-    nbincontents = len(bincontent)
+  def findoutliers(self, bincontent):
+    bincontent = bincontent.copy()
 
     #remove outliers:
     #first try to use all the templatecomponents, then try one, then two, etc.
@@ -204,8 +197,21 @@ class OneTemplate(ConstrainedTemplatesBase):
 
       if significances:
         nameswithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
-        namestoremove = nameswithmaxsignificance
+        return nameswithmaxsignificance
         break
+
+    return frozenset()
+
+
+class OneTemplate(ConstrainedTemplatesBase):
+  templatenames = "",
+  pureindices = 0, 2
+
+  def computefinalbincontents(self, bincontents):
+    bincontent = bincontents[0]
+    nbincontents = len(bincontent)
+
+    namestoremove = self.findoutliers(bincontent)
 
     warning = []
     if namestoremove:
@@ -233,8 +239,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def computefinalbincontents(self, bincontents):
     warning = []
 
-    bincontents = bincontents[:]
-    rawbincontents = bincontents[:]
+    bincontents = copy.deepcopy(bincontents)
+    originalbincontents = copy.deepcopy(bincontents)
     nbincontents = len(bincontents[0])
 
     #Each template component produces a 3D probability distribution in (SM, int, BSM)
@@ -243,27 +249,29 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     x0 = [[] for t in self.templates]
     sigma = [[] for t in self.templates]
 
-    for name in bincontents[0]:
-      for thisonescontent, thisonesrawcontent, thisx0, thissigma, t in itertools.izip(bincontents, rawbincontents, x0, sigma, self.templates):
+    for bincontent, t in itertools.izip(bincontents, self.templates):
+      for name in list(bincontent):
         if (
-          thisonescontent[name].n == 0    #0 content - maginfy error to the maximum error
+          bincontent[name].n == 0    #0 content - maginfy error to the maximum error
           or (                            #large relative error and this is the only nonzero one - same
-            thisonescontent[name].s / abs(thisonescontent[name].n) > 0.5
-            and all(othercontent.n == 0 for othername, othercontent in thisonescontent.iteritems() if othername != name)
+            bincontent[name].s / abs(bincontent[name].n) > 0.5
+            and all(othercontent.n == 0 for othername, othercontent in bincontent.iteritems() if othername != name)
           )
         ):
-          thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues()))
+          bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues()))
         elif (
-          thisonescontent[name].s / abs(thisonescontent[name].n) > 0.5  #large relative error - magnify error to the maximum error considering only the ones with nonzero content
+          bincontent[name].s / abs(bincontent[name].n) > 0.5  #large relative error - magnify error to the maximum error considering only the ones with nonzero content
         ):
-          thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
-        elif (  #largeish relative error, but 5sigma away from the weighted average of the rest
-          thisonescontent[name].s / abs(thisonescontent[name].n) > 0.1
-          and len(thisonescontent) > 1
-          and abs(thisonescontent[name] - weightedaverage(othercontent for othername, othercontent in thisonesrawcontent.iteritems() if othername != name)).n / thisonescontent[name].s > 5
-        ):
-          warning.append(name + " is 5sigma away from the others for " + t.name + ", inflating its error")
-          thisonescontent[name] = ufloat(thisonescontent[name].n, max(othercontent.s for othercontent in thisonescontent.itervalues() if othercontent.n != 0))
+          bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues() if othercontent.n != 0))
+
+      outliers = self.findoutliers(bincontent)
+      if outliers:
+        warning.append("there are outliers for "+t.name+": "+", ".join(sorted(outliers)))
+      for name in outliers:
+        bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues() if othercontent.n != 0))
+
+    for name in bincontents[0]:
+      for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
 
@@ -291,10 +299,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
-    for t, thisonescontent in itertools.izip(self.templates, bincontents):
+    fmt2 = fmt + " (originally {:10.3e})"
+    for t, thisonescontent, originalcontent in itertools.izip(self.templates, bincontents, originalbincontents):
       thingtoprint += "\n"+t.name+":"
       for name, content in sorted(thisonescontent.iteritems()):
-        thingtoprint += "\n"+fmt.format(name, content)
+        if content.n == originalcontent[name].n and content.s == originalcontent[name].s:
+          thingtoprint += "\n"+fmt.format(name, content)
+        else:
+          thingtoprint += "\n"+fmt2.format(name, content, originalcontent[name])
 
     if self.constraintmin <= constraint(startpoint) <= self.constraintmax:
       fitprintmessage = "no need for a fit - average already satisfies the constraint"
