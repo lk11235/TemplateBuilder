@@ -109,21 +109,26 @@ class ConstrainedTemplatesBase(object):
         print "Error when finding content for bin", x, y, z
         raise
 
+      for t, content in itertools.izip(self.templates, finalbincontents):
+        t.SetBinContentError(x, y, z, content)
+
       printmessage = "  {:3d} {:3d} {:3d}:\n".format(x, y, z) + printmessage
       if (x, y, z) in printbins:
         printedbins.append(printmessage)
       if printallbins:
         print printmessage
 
-      if warning:
+      if warning or printallbins:
         if isinstance(warning, basestring):
           warning = [warning]
         else:
           warning = list(warning)
-        warnings.append("\n      ".join(["  {:3d} {:3d} {:3d}: ".format(x, y, z)]+warning))
-
-      for t, content in itertools.izip(self.templates, finalbincontents):
-        t.SetBinContentError(x, y, z, content)
+        warnings.append(
+          "\n      ".join(
+            ["  {:3d} {:3d} {:3d}: (pure bin contents: {})".format(x, y, z, ", ".join(str(_) for _ in self.purebincontents(x, y, z)))]
+            +warning
+          )
+        )
 
     if printedbins:
       print
@@ -202,6 +207,13 @@ class ConstrainedTemplatesBase(object):
 
     return frozenset()
 
+  def purebincontents(self, x, y, z):
+    for t in self.puretemplates:
+      yield t.GetBinContentError(x, y, z)
+
+  @property
+  def puretemplates(self):
+    return [self.templates[i] for i in self.pureindices]
 
 class OneTemplate(ConstrainedTemplatesBase):
   templatenames = "",
@@ -309,20 +321,23 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         adjust to constraint --> fit starting from:
         {} (NLL = {})
 
+        bounds:
+        {}
+
         result:
         {}
       """)
 
       fitstartpoint = self.adjuststartpoint(startpoint, constraint)
 
-      bounds = optimize.Bounds(
-        [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
-        [2*_ if i in self.pureindices else np.inf for i, _ in enumerate(fitstartpoint)]
-      )
+      bounds = self.bounds(fitstartpoint)
 
       try:
-        if tuple(fitstartpoint) not in self.__fitresultscache:
-          fitresult = self.__fitresultscache[tuple(fitstartpoint)] = optimize.minimize(
+        if tuple(startpoint) not in self.__fitresultscache:
+          #use startpoint as the key, not fitstartpoint,
+          #because fitstartpoint has more numerical operations on it
+          #and therefore leads to error
+          fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.minimize(
             negativeloglikelihood,
             fitstartpoint,
             method='trust-constr',
@@ -332,21 +347,28 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
             bounds=bounds,
             options = {},
           )
+          if fitresult.fun > negativeloglikelihood(fitstartpoint):
+            fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.OptimizeResult(
+              message=fitresult.message + "\nx = {0.x}, fun = {0.fun}, but the starting point was better, using that instead".format(fitresult),
+              x=fitstartpoint,
+              fun=negativeloglikelihood(fitstartpoint),
+              status=fitresult.status * -1,
+            )
           if all(t.mirrortype for t in self.templates):
-            mirroredstartpoint = self.applymirrortoarray(fitstartpoint)
+            mirroredstartpoint = self.applymirrortoarray(startpoint)
             self.__fitresultscache[tuple(mirroredstartpoint)] = optimize.OptimizeResult(
               x=self.applymirrortoarray(fitresult.x),
               fun=fitresult.fun,
               message="(mirrored) "+fitresult.message,
               status=fitresult.status,
             )
-        fitresult = self.__fitresultscache[tuple(fitstartpoint)]
+        fitresult = self.__fitresultscache[tuple(startpoint)]
 
       except:
-        print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), "")
+        print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, "")
         raise
 
-      fitprintmessage = fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), fitresult).strip()
+      fitprintmessage = fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, fitresult).strip()
 
       finalbincontents = fitresult.x
 
@@ -358,6 +380,17 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       thingtoprint += "\n"+fmt.format("final "+name, content)
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
+
+  def bounds(self, fitstartpoint):
+    """
+    most lenient possible bounds
+    override this to get better results!
+    """
+    return optimize.Bounds(
+      [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
+      [np.inf for i in xrange(self.ntemplates)],
+      keep_feasible=True,
+    )
 
   def adjuststartpoint(self, startpoint, constraint):
     assert len(constraint(startpoint)) == 1
@@ -373,9 +406,16 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       if functiontosolvefor0(x) > 0:
         break
 
-    result = optimize.newton(functiontosolvefor0, x-0.5, fprime=autograd.grad(functiontosolvefor0), fprime2=autograd.grad(autograd.grad(functiontosolvefor0)))
+    increaseby = optimize.newton(functiontosolvefor0, x-0.5, fprime=autograd.grad(functiontosolvefor0), fprime2=autograd.grad(autograd.grad(functiontosolvefor0)))
 
-    return startpoint * (increasepureindices*result + 1)
+    for i in xrange(10000):
+      result = startpoint * (increasepureindices*increaseby + 1)
+      if constraint(result) > 0:
+        return result
+      increaseby *= 1.0000001
+      if i > 5000: print i, increaseby, result, constraint(result)
+
+    raise RuntimeError("increasing didn't work")
 
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
@@ -446,3 +486,10 @@ class OneParameterVVH(ConstrainedTemplatesWithFit):
       )
     return negativeloglikelihood
 
+  def bounds(self, fitstartpoint):
+    maxevenstartpoint = max(_ for i, _ in enumerate(fitstartpoint) if i in (0, 2, 4))
+    return optimize.Bounds(
+      [np.finfo(float).eps, -10*maxevenstartpoint, -10*maxevenstartpoint, -10*maxevenstartpoint, np.finfo(float).eps],
+      [2*fitstartpoint[0],   10*maxevenstartpoint,  10*maxevenstartpoint,  10*maxevenstartpoint, 2*fitstartpoint[4] ],
+      keep_feasible=True,
+    )

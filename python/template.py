@@ -82,9 +82,7 @@ class Template(object):
 
   @property
   def integral(self):
-    error = array.array("d", [0])
-    nominal = self.__h.IntegralAndError(1, self.__h.GetNbinsX(), 1, self.__h.GetNbinsY(), 1, self.__h.GetNbinsZ(), error)
-    return uncertainties.ufloat(nominal, error[0])
+    return sum(self.GetBinContentError(x, y, z) for x, y, z in self.binsxyz)
 
   def GetBinContentError(self, *args):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
