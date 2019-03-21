@@ -51,7 +51,7 @@ class Tree(object):
     yformula, ybins, ymin, ymax,
     zformula, zbins, zmin, zmax,
     cutformula, weightformula,
-    mirrortype, directory,
+    mirrortype, scaleby, directory,
   ):
     import ROOT
 
@@ -74,7 +74,7 @@ class Tree(object):
           ROOT.TTreeFormula(name+"_z", zformula, self.__t), zbins, zmin, zmax,
           ROOT.TTreeFormula(name+"_cut", cutformula, self.__t),
           ROOT.TTreeFormula(name+"_weight", weightformula, self.__t),
-          mirrortype,
+          mirrortype, scaleby,
         )
       )
 

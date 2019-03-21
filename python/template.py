@@ -23,17 +23,6 @@ class Template(object):
 
     self.__name = name
     self.__printprefix = printprefix
-    self.__templatecomponenthandles = [
-      tree.registertemplatecomponent(
-        name+"_"+tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1], printprefix,
-        xformula, xbins, xmin, xmax,
-        yformula, ybins, ymin, ymax,
-        zformula, zbins, zmin, zmax,
-        cutformula, weightformula,
-        mirrortype,
-      )
-      for i, tree in enumerate(trees)
-    ]
 
     import ROOT
 
@@ -62,6 +51,18 @@ class Template(object):
     self.__floor = floor
 
     self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = False
+
+    self.__templatecomponenthandles = [
+      tree.registertemplatecomponent(
+        name+"_"+tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1], printprefix,
+        xformula, xbins, xmin, xmax,
+        yformula, ybins, ymin, ymax,
+        zformula, zbins, zmin, zmax,
+        cutformula, weightformula,
+        mirrortype, scaleby,
+      )
+      for i, tree in enumerate(trees)
+    ]
 
   @property
   def name(self): return self.__name
@@ -96,9 +97,6 @@ class Template(object):
   def doscale(self):
     if self.__didscale: raise RuntimeError("Trying to scale twice!")
     self.__didscale = True
-    #in principle can implement per-bin errors d(scaleby*bincontent)
-    assert uncertainties.std_dev(self.__scaleby) == 0
-    self.__h.Scale(uncertainties.nominal_value(self.__scaleby))
 
   def checkmirror(self):
     if self.__dicheckmirror: raise RuntimeError("Trying to mirror twice!")

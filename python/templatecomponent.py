@@ -4,6 +4,7 @@ import functools
 import itertools
 import re
 
+from autograd import numpy as np
 import uncertainties
 
 import ROOT
@@ -17,7 +18,7 @@ class TemplateComponent(object):
     ytreeformula, ybins, ymin, ymax,
     ztreeformula, zbins, zmin, zmax,
     cuttreeformula, weighttreeformula,
-    mirrortype,
+    mirrortype, scaleby,
   ):
     self.__name = name
     self.__printprefix = printprefix
@@ -66,6 +67,9 @@ class TemplateComponent(object):
     self.__mirrortype = mirrortype
     if mirrortype is not None: assert ymin == -ymax and ybins%2 == 0
 
+    assert uncertainties.std_dev(scaleby) == 0
+    self.__scaleby = uncertainties.nominal_value(scaleby)
+
     self.__locked = False
 
   @staticmethod
@@ -92,8 +96,12 @@ class TemplateComponent(object):
       binz = self.binz()
       weight = self.weight()
 
+      if biny == 0: biny += 1e-10
+
       if self.__mirrortype is not None:
         weight /= 2
+
+      weight *= self.__scaleby
 
       self.__h.Fill(binx, biny, binz, weight)
       self.__habs.Fill(binx, biny, binz, abs(weight))
@@ -120,7 +128,7 @@ class TemplateComponent(object):
   def lock(self):
     if self.__locked: return
 
-    if self.__habs.GetEntries():
+    if any(self.__habs.GetBinContent(x, y, z) for x, y, z in self.binsxyz):
       #floor the error
       maxerrorratio, errortoset = max(
         (self.__habs.GetBinError(x, y, z) / self.__habs.GetBinContent(x, y, z), self.__h.GetBinError(x, y, z))

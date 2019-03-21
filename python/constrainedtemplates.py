@@ -164,6 +164,8 @@ class ConstrainedTemplatesBase(object):
   def findoutliers(self, bincontent):
     bincontent = bincontent.copy()
 
+    if all(_.s == 0 for _ in bincontent.itervalues()): return frozenset()
+
     #remove outliers:
     #first try to use all the templatecomponents, then try one, then two, etc.
     for i in xrange(len(bincontent)-1):

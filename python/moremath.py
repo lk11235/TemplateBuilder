@@ -23,6 +23,8 @@ def notnan(function):
 def weightedaverage(values):
   values = tuple(values)
   if not values: raise IOError("Can't take the weighted average of an empty array")
+  if all(x.std_dev == 0 for x in values):
+    return sum(values) / len(values)
   return uncertainties.ufloat(
     sum(x.nominal_value / x.std_dev**2 for x in values) / sum(1 / x.std_dev**2 for x in values),
     sum(1 / x.std_dev**2 for x in values) ** -0.5
