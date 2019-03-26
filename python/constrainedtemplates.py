@@ -288,19 +288,15 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     x0 = [np.array(_) for _ in x0]
     sigma = [np.array(_) for _ in sigma]
 
-    negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents)
-    nlljacobian = autograd.jacobian(negativeloglikelihood)
-    nllhessian = autograd.hessian(negativeloglikelihood)
+    startpoint = np.array([weightedaverage(_.itervalues()).n for _ in bincontents])
+    for i in self.pureindices:
+      if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
 
     constraint = self.constraint
     constraintjacobian = autograd.jacobian(constraint)
     constrainthessianv = autograd.linear_combination_of_hessians(constraint)
 
     nonlinearconstraint = optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)
-
-    startpoint = np.array([weightedaverage(_.itervalues()).n for _ in bincontents])
-    for i in self.pureindices:
-      if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
@@ -318,6 +314,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       finalbincontents = startpoint
     else:
       fitprintmessage = textwrap.dedent("""
+        multiply by {:.0e} for numerical stability
         weighted averages:
         {}
         adjust to constraint --> fit starting from:
@@ -330,9 +327,15 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         {}
       """)
 
+      multiply = 10 ** -min(np.floor(np.log10(abs(startpoint))))
+      startpoint *= multiply
       fitstartpoint = self.adjuststartpoint(startpoint, constraint)
 
-      bounds = self.bounds(fitstartpoint)
+      negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents, multiply=multiply)
+      nlljacobian = autograd.jacobian(negativeloglikelihood)
+      nllhessian = autograd.hessian(negativeloglikelihood)
+
+      bounds = self.bounds(fitstartpoint, multiply)
 
       try:
         if tuple(startpoint) not in self.__fitresultscache:
@@ -367,12 +370,12 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         fitresult = self.__fitresultscache[tuple(startpoint)]
 
       except:
-        print thingtoprint+"\n\n"+fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, "")
+        print thingtoprint+"\n\n"+fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, "")
         raise
 
-      fitprintmessage = fitprintmessage.format(startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, fitresult).strip()
+      fitprintmessage = fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, fitresult).strip()
 
-      finalbincontents = fitresult.x
+      finalbincontents = fitresult.x / multiply
 
       warning.append("fit converged with NLL = {}".format(fitresult.fun))
       if fitresult.status not in (1, 2): warning.append(fitresult.message)
@@ -383,14 +386,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
 
-  def bounds(self, fitstartpoint):
+  def bounds(self, fitstartpoint, multiply):
     """
     most lenient possible bounds
     override this to get better results!
     """
     return optimize.Bounds(
-      [np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)],
-      [np.inf for i in xrange(self.ntemplates)],
+      np.array([np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)]) * multiply,
+      np.array([np.inf for i in xrange(self.ntemplates)]) * multiply,
       keep_feasible=True,
     )
 
@@ -427,8 +430,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       raise ImportError("To use "+type(self).__name__+", please install a newer scipy.")
     self.__fitresultscache = {}
 
-  @abc.abstractmethod
-  def makeNLL(self, x0, sigma, nbincontents): pass
+  def makeNLL(self, x0, sigma, nbincontents, multiply):
+    def negativeloglikelihood(x):
+      return sum(
+        ((x[j]/multiply - x0[j][i]) / sigma[j][i]) ** 2
+        for i in xrange(nbincontents)
+        for j in xrange(self.ntemplates)
+      )
+    return negativeloglikelihood
 
   @abc.abstractmethod
   def constraint(self, x): "can be static"
@@ -453,17 +462,6 @@ class OneParameterggH(ConstrainedTemplatesWithFit):
   constraintmin = np.finfo(np.float).eps
   constraintmax = np.inf
 
-  def makeNLL(self, x0, sigma, nbincontents):
-    def negativeloglikelihood(x):
-      return sum(
-        (
-          ((x[0] - x0[0][i]) / sigma[0][i]) ** 2
-        + ((x[1] - x0[1][i]) / sigma[1][i]) ** 2
-        + ((x[2] - x0[2][i]) / sigma[2][i]) ** 2
-        ) for i in xrange(nbincontents)
-      )
-    return negativeloglikelihood
-
 class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
   pureindices = 0, 4
@@ -475,23 +473,10 @@ class OneParameterVVH(ConstrainedTemplatesWithFit):
   constraintmin = np.finfo(np.float).eps
   constraintmax = np.inf
 
-  def makeNLL(self, x0, sigma, nbincontents):
-    def negativeloglikelihood(x):
-      return sum(
-        (
-          ((x[0] - x0[0][i]) / sigma[0][i]) ** 2
-        + ((x[1] - x0[1][i]) / sigma[1][i]) ** 2
-        + ((x[2] - x0[2][i]) / sigma[2][i]) ** 2
-        + ((x[3] - x0[3][i]) / sigma[3][i]) ** 2
-        + ((x[4] - x0[4][i]) / sigma[4][i]) ** 2
-        ) for i in xrange(nbincontents)
-      )
-    return negativeloglikelihood
-
-  def bounds(self, fitstartpoint):
+  def bounds(self, fitstartpoint, multiply):
     maxevenstartpoint = max(_ for i, _ in enumerate(fitstartpoint) if i in (0, 2, 4))
     return optimize.Bounds(
-      [np.finfo(float).eps, -10*maxevenstartpoint, -10*maxevenstartpoint, -10*maxevenstartpoint, np.finfo(float).eps],
-      [2*fitstartpoint[0],   10*maxevenstartpoint,  10*maxevenstartpoint,  10*maxevenstartpoint, 2*fitstartpoint[4] ],
+      np.array([np.finfo(float).eps, -10*maxevenstartpoint, -10*maxevenstartpoint, -10*maxevenstartpoint, np.finfo(float).eps]) * multiply,
+      np.array([2*fitstartpoint[0],   10*maxevenstartpoint,  10*maxevenstartpoint,  10*maxevenstartpoint, 2*fitstartpoint[4] ]) * multiply,
       keep_feasible=True,
     )
