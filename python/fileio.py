@@ -40,6 +40,16 @@ def RootFiles(*filenames, **kwargs):
     yield [f]+morefs
 
 @contextlib.contextmanager
+def opens(*filenames, **kwargs):
+  if not filenames: yield []; return
+
+  commonargs = kwargs.pop("commonargs", ())
+  if kwargs: raise ValueError("Unknown kwargs: "+" ".join(kwargs))
+
+  with open(filenames[0], *commonargs) as f, opens(*filenames[1:], commonargs=commonargs) as morefs:
+    yield [f]+morefs
+
+@contextlib.contextmanager
 def RootCd(tdirectory, *args, **kwargs):
   import ROOT
 

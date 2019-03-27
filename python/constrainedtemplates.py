@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import abc, copy, itertools, textwrap
 
 try:
@@ -19,20 +21,21 @@ from uncertainties import ufloat
 from moremath import minimizequartic, weightedaverage
 
 
-def ConstrainedTemplates(constrainttype, templates):
+def ConstrainedTemplates(constrainttype, *args, **kwargs):
   return {
     "unconstrained": OneTemplate,
     "oneparameterggH": OneParameterggH,
     "oneparameterVVH": OneParameterVVH,
-  }[constrainttype](templates)
+  }[constrainttype](*args, **kwargs)
 
 class ConstrainedTemplatesBase(object):
   __metaclass__ = abc.ABCMeta
 
-  def __init__(self, templates):
+  def __init__(self, templates, logfile=None):
     self.__templates = templates
     if len(templates) != self.ntemplates:
       raise ValueError("Wrong number of templates ({}) for {}, should be {}".format(len(templates), type(self).__name__, ntemplates))
+    self.__logfile = logfile
 
   @property
   def templates(self): 
@@ -81,14 +84,18 @@ class ConstrainedTemplatesBase(object):
 
       return bincontents
 
+  def write(self, thing):
+    print(thing)
+    if self.__logfile is not None:
+      self.__logfile.write(thing+"\n")
+
   def makefinaltemplates(self, printbins, printallbins):
     printbins = tuple(tuple(_) for _ in printbins)
     assert all(len(_) == 3 for _ in printbins)
-    print
-    print "Making the final templates:"
+    self.write("Making the final templates:")
     for name, _ in itertools.izip(self.templatenames, self.templates):
-      print "  {:>10}: {:40} {:45}".format(name, _.printprefix, _.name)
-    print "from individual templates with integrals:"
+      self.write("  {:>10}: {:40} {:45}".format(name, _.printprefix, _.name))
+    self.write("from individual templates with integrals:")
 
     printedbins = []
     warnings = []
@@ -96,7 +103,7 @@ class ConstrainedTemplatesBase(object):
     for _ in self.templates:
       for component in _.templatecomponents:
         component.lock()
-        print "  {:45} {:10.3e}".format(component.name, component.integral)
+        self.write("  {:45} {:10.3e}".format(component.name, component.integral))
 
     for x, y, z in self.binsxyz:
       bincontents = self.getcomponentbincontents(x, y, z)
@@ -106,7 +113,7 @@ class ConstrainedTemplatesBase(object):
       try:
         finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents)
       except:
-        print "Error when finding content for bin", x, y, z
+        print("Error when finding content for bin", x, y, z)
         raise
 
       for t, content in itertools.izip(self.templates, finalbincontents):
@@ -116,7 +123,7 @@ class ConstrainedTemplatesBase(object):
       if (x, y, z) in printbins:
         printedbins.append(printmessage)
       if printallbins:
-        print printmessage
+        self.write(printmessage)
 
       if warning or printallbins:
         if isinstance(warning, basestring):
@@ -131,23 +138,23 @@ class ConstrainedTemplatesBase(object):
         )
 
     if printedbins:
-      print
-      print "Bins you requested to print:"
-      for _ in printedbins: print _
+      self.write("")
+      self.write("Bins you requested to print:")
+      for _ in printedbins: self.write(_)
 
     if warnings:
-      print
-      print "Warnings:"
-      for _ in warnings: print _
+      self.write("")
+      self.write("Warnings:")
+      for _ in warnings: self.write(_)
 
     for _ in self.templates:
       _.finalize()
 
-    print
-    print "final integrals:"
+    self.write("")
+    self.write("final integrals:")
     for name, t in itertools.izip(self.templatenames, self.templates):
-      print "  {:>10} = {:10.3e}".format(name, t.integral)
-    print
+      self.write("  {:>10} = {:10.3e}".format(name, t.integral))
+    self.write("")
 
 
   @abc.abstractmethod
@@ -370,7 +377,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         fitresult = self.__fitresultscache[tuple(startpoint)]
 
       except:
-        print thingtoprint+"\n\n"+fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, "")
+        print(thingtoprint+"\n\n"+fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, ""))
         raise
 
       fitprintmessage = fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, fitresult).strip()
@@ -418,7 +425,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       if constraint(result) > 0:
         return result
       increaseby *= 1.0000001
-      if i > 5000: print i, increaseby, result, constraint(result)
+      if i > 5000: print(i, increaseby, result, constraint(result))
 
     raise RuntimeError("increasing didn't work")
 

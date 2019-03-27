@@ -1,6 +1,6 @@
 import re
 
-from rootfile import RootCd, RootFile
+from fileio import RootCd, RootFile
 from templatecomponent import TemplateComponent
 
 class Tree(object):

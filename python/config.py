@@ -4,11 +4,12 @@ import itertools
 import json
 import numbers
 import os
+import re
 
 import uncertainties
 
 from constrainedtemplates import ConstrainedTemplates
-from rootfile import RootCd, RootFiles
+from fileio import opens, RootCd, RootFiles
 from tree import Tree
 from template import Template
 
@@ -243,14 +244,19 @@ class TemplateBuilder(object):
     alltrees = {Tree(*args) for args in treeargs}
 
     outfilenames = [config["outputFile"] for config in self.__configs]
+    for outfilename in outfilenames:
+      if not outfilename.endswith(".root"):
+        raise ValueError(outfilename+" doesn't end with .root")
+    logfilenames = [re.sub("[.]root$", ".log", outfilename) for outfilename in outfilenames]
+    assert not set(logfilenames) & set(outfilenames), set(logfilenames) & set(outfilenames)
 
     commonprefix = os.path.commonprefix(outfilenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in outfilenames))[::-1]
 
     templatesbyname = {}
 
-    with RootFiles(*outfilenames, commonargs=["RECREATE" if self.__force else "CREATE"]) as newfiles:
-      for config, outfilename, outfile in itertools.izip(self.__configs, outfilenames, newfiles):
+    with RootFiles(*outfilenames, commonargs=["RECREATE" if self.__force else "CREATE"]) as newfiles, opens(*logfilenames, commonargs="w") as logfiles:
+      for config, outfilename, outfile, logfile in itertools.izip(self.__configs, outfilenames, newfiles, logfiles):
         with RootCd(outfile):
           for templateconfig in config["templates"]:
             mirrortype = None
@@ -303,7 +309,7 @@ class TemplateBuilder(object):
                 constrainedtemplates.append(templatesbyname.pop(name))
               except KeyError:
                 raise ValueError("Trying to use "+name+" for a constraint, but didn't find this template.  (Or maybe it's used for multiple constraints.  Don't do that.)")
-            constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates))
+            constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates, logfile=logfile))
 
       for tree in alltrees:
         with tree:
