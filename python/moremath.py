@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 import functools
+import itertools
 
+import autograd
 import autograd.numpy as np
+import scipy.optimize as optimize
 import uncertainties
 
 def notnan(function):
@@ -61,21 +64,34 @@ def minimizequartic(coeffs):
   if np.isnan(result): assert False, (coeffs, result)
   return np.real(result)
 
+def getquartic4d(coeffs):
+  def quartic4d(x):
+    assert len(x) == 4
+    xand1 = np.array([x[0], x[1], x[2], x[3], 1.])
+    return sum(
+      coeff * np.prod((coeff,) + xs)
+      for coeff, xs in itertools.izip_longest(
+        coeffs,
+        itertools.combinations_with_replacement(xand1, 4),
+      )
+    )
+  return quartic4d
+
+def minimizequartic4d(coeffs):
+  quartic = getquartic4d(coeffs)
+  quarticjacobian = autograd.jacobian(quartic)
+  quartichessian = autograd.hessian_vector_product(quartic)
+  result = optimize.basinhopping(
+    func=quartic,
+    x0=np.array([1., 1., -5., 3.]),
+    minimizer_kwargs=dict(
+      jac=quarticjacobian,
+      hess=quartichessian,
+    ),
+  )
+  print
+  return result
+
 if __name__ == "__main__":
-  from autograd import holomorphic_grad, grad, jacobian, hessian, linear_combination_of_hessians
-  print cubicformula(np.array([1., 2., 3., 4.]))
-
-  def cubicformula0(coeffs): return cubicformula(coeffs)[0]
-
-  epsilonvalue = 1e-6
-
-  coeffs = np.array([1., 2., 3., 3., 5.])
-  def epsilon(i): return np.array([epsilonvalue if _==i else 0 for _ in range(5)])
-
-  for i in range(5):
-    print (minimizequartic(coeffs+epsilon(i)) - minimizequartic(coeffs-epsilon(i))) / (2*epsilonvalue)
-  print jacobian(minimizequartic)(coeffs)
-  print
-  print
-  print hessian(minimizequartic)(coeffs)
-  print linear_combination_of_hessians(minimizequartic)(coeffs, np.array([1,2,3,4,5.]))
+  a = np.array([1 if i in (0, 69, 35, 55, 65) else -1 if i in (5,) else 0 for i in xrange(70)])
+  print minimizequartic4d(a)

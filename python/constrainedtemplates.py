@@ -26,6 +26,8 @@ def ConstrainedTemplates(constrainttype, *args, **kwargs):
     "unconstrained": OneTemplate,
     "oneparameterggH": OneParameterggH,
     "oneparameterVVH": OneParameterVVH,
+    "fourparameterggH": FourParameterggH,
+    "fourparameterVVH": FourParameterVVH,
   }[constrainttype](*args, **kwargs)
 
 class ConstrainedTemplatesBase(object):
@@ -316,7 +318,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         else:
           thingtoprint += "\n"+fmt2.format(name, content, originalcontent[name])
 
-    if self.constraintmin <= constraint(startpoint) <= self.constraintmax:
+    constraintatstart = constraint(startpoint)
+    if np.all(self.constraintmin <= constraintatstart) and np.all(constraintatstart <= self.constraintmax):
       fitprintmessage = "no need for a fit - average already satisfies the constraint"
       finalbincontents = startpoint
     else:
@@ -487,3 +490,95 @@ class OneParameterVVH(ConstrainedTemplatesWithFit):
       np.array([2*fitstartpoint[0],   10*maxevenstartpoint,  10*maxevenstartpoint,  10*maxevenstartpoint, 2*fitstartpoint[4] ]) * multiply,
       keep_feasible=True,
     )
+
+class FourParameterggH(ConstrainedTemplatesWithFit):
+  templatenames = (
+    "SM", "g11gi1", "g11gj1", "g11gk1", "g11gl1",
+    "i",  "gi1gj1", "gi1gk1", "gi1gl1",
+    "j",  "gj1gk1", "gj1gl1",
+    "k",  "gk1gl1",
+    "l",
+  )
+  pureindices = 0, 5, 9, 12, 14
+
+  @staticmethod
+  def constraint(x):
+    return np.array([
+      2*(x[0 ]*x[5 ])**.5 - abs(x[1 ]),
+      2*(x[0 ]*x[9 ])**.5 - abs(x[2 ]),
+      2*(x[0 ]*x[12])**.5 - abs(x[3 ]),
+      2*(x[0 ]*x[14])**.5 - abs(x[4 ]),
+      2*(x[5 ]*x[9 ])**.5 - abs(x[6 ]),
+      2*(x[5 ]*x[12])**.5 - abs(x[7 ]),
+      2*(x[5 ]*x[14])**.5 - abs(x[8 ]),
+      2*(x[9 ]*x[12])**.5 - abs(x[10]),
+      2*(x[9 ]*x[14])**.5 - abs(x[11]),
+      2*(x[12]*x[14])**.5 - abs(x[13]),
+    ])
+
+  constraintmin = np.finfo(np.float).eps
+  constraintmax = np.inf
+
+class FourParameterVVH(ConstrainedTemplatesWithFit):
+  templatenames = (
+    "SM",
+    "g13gi1", "g13gj1",    "g13gk1",       "g13gl1",
+
+    "g12gi2", "g12gi1gj1", "g12gi1gk1",    "g12gi1gl1",
+              "g12gj2",    "g12gj1gk1",    "g12gj1gl1",
+                           "g12gk2",       "g12gk1gl1",
+                                           "g12gl2",
+
+    "g11gi3", "g11gi2gj1", "g11gi2gk1",    "g11gi2gl1",
+              "g11gi1gj2", "g11gi1gj1gk1", "g11gi1gj1gl1",
+                           "g11gi1gk2",    "g11gi1gk1gl1",
+                                           "g11gi1gl2",
+              "g11gj3",    "g11gj2gk1",    "g11gj2gl1",
+                           "g11gj1gk2",    "g11gj1gk1gl1",
+                                           "g11gj1gl2",
+                           "g11gk3",       "g11gk2gl1",
+                                           "g11gk1gl2",
+                                           "g11gl3",
+
+    "i",
+              "gi3gj1",    "gi3gk1",       "gi3gl1",
+
+              "gi2gj2",    "gi2gj1gk1",    "gi2gj1gl1",
+                           "gi2gk2",       "gi2gk1gl1",
+                                           "gi2gl2",
+
+              "gi1gj3",    "gi1gj2gk1",    "gi1gj2gl1",
+                           "gi1gj1gk2",    "gi1gj1gk1gl1",
+                                           "gi1gj1gl2",
+                           "gi1gk3",       "gi1gk2gl1",
+                                           "gi1gk1gl2",
+                                           "gi1gl3",
+
+    "j",
+                           "gj3gk1",       "gj3gl1",
+
+                           "gj2gk2",       "gj2gk1gl1",
+                                           "gj2gl2",
+
+                           "gj1gk3",       "gj1gk2gl1",
+                                           "gj1gk1gl2",
+                                           "gj1gl3",
+
+    "k",
+                                           "gk3gl1",
+
+                                           "gk2gl2",
+
+                                           "gk1gl3",
+
+    "l",
+
+  )
+  pureindices = 0, 35, 55, 65, 69
+
+  @staticmethod
+  def constraint(x):
+    assert False
+
+  constraintmin = np.finfo(np.float).eps
+  constraintmax = np.inf
