@@ -339,7 +339,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
       multiply = 10 ** -min(np.floor(np.log10(abs(startpoint))))
       startpoint *= multiply
-      fitstartpoint = self.adjuststartpoint(startpoint, constraint)
+      fitstartpoint = self.adjuststartpoint(startpoint, constraint, self.constraintmin, self.constraintmax)
 
       negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents, multiply=multiply)
       nlljacobian = autograd.jacobian(negativeloglikelihood)
@@ -407,30 +407,36 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       keep_feasible=True,
     )
 
-  def adjuststartpoint(self, startpoint, constraint):
-    assert len(constraint(startpoint)) == 1
-    assert constraint(startpoint) < 0
-    #we want to adjust the start point in a reasonable way so that it fills the constraint
-    #the simple way to do this is to increase the pure components by some factor
-    increasepureindices = np.array([1 if i in self.pureindices else 0 for i, _ in enumerate(startpoint)])
-    def functiontosolvefor0(x):
-      return constraint(startpoint * (increasepureindices*x + 1))
-    assert functiontosolvefor0(0) < 0
+  def adjuststartpoint(self, startpoint, constraint, constraintmin, constraintmax):
+    for constraintidx in xrange(len(constraint(startpoint))):
+      if (constraintmin < constraint(startpoint))[constraintidx]: continue
 
-    for x in itertools.count(0):
-      if functiontosolvefor0(x) > 0:
-        break
+      #we want to adjust the start point in a reasonable way so that it fills the constraint
+      #the simple way to do this is to increase the pure components by some factor
+      increasepureindices = np.array([1 if i in self.pureindices else 0 for i, _ in enumerate(startpoint)])
+      def functiontosolvefor0(x):
+        return constraint(startpoint * (increasepureindices*x + 1))[constraintidx] - constraintmin
+      assert functiontosolvefor0(0) < 0
 
-    increaseby = optimize.newton(functiontosolvefor0, x-0.5, fprime=autograd.grad(functiontosolvefor0), fprime2=autograd.grad(autograd.grad(functiontosolvefor0)))
+      for x in itertools.count(0):
+        if functiontosolvefor0(x) > 0:
+          break
 
-    for i in xrange(10000):
-      result = startpoint * (increasepureindices*increaseby + 1)
-      if constraint(result) > 0:
-        return result
-      increaseby *= 1.0000001
-      if i > 5000: print(i, increaseby, result, constraint(result))
+      increaseby = optimize.newton(functiontosolvefor0, x-0.5, fprime=autograd.grad(functiontosolvefor0), fprime2=autograd.grad(autograd.grad(functiontosolvefor0)))
 
-    raise RuntimeError("increasing didn't work")
+      for i in xrange(10000):
+        result = startpoint * (increasepureindices*increaseby + 1)
+        if (constraintmin < constraint(result))[constraintidx]:
+          break
+        increaseby *= 1.0000001
+        if i > 5000: print(i, increaseby, result, constraint(result))
+      else:
+        raise RuntimeError("increasing didn't work")
+
+    assert np.all(constraintmin < constraint(result)), constraint(result)
+    assert np.all(constraint(result) < constraintmax), constraint(result)
+
+    return result
 
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
