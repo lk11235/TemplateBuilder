@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 
+import collections
 import functools
 import itertools
+import subprocess
 
 import autograd
 import autograd.numpy as np
 import scipy.optimize as optimize
 import uncertainties
+
+import hom4pswrapper
 
 def notnan(function):
   @functools.wraps(function)
@@ -69,7 +73,7 @@ def getquartic4d(coeffs):
     assert len(x) == 4
     xand1 = np.array([x[0], x[1], x[2], x[3], 1.])
     return sum(
-      coeff * np.prod((coeff,) + xs)
+      np.prod((coeff,) + xs)
       for coeff, xs in itertools.izip_longest(
         coeffs,
         itertools.combinations_with_replacement(xand1, 4),
@@ -77,21 +81,49 @@ def getquartic4d(coeffs):
     )
   return quartic4d
 
-def minimizequartic4d(coeffs):
+def getquartic4dmonomials(coeffs):
+  xand1 = "1wxyz"
+  for coeff, xs in itertools.izip_longest(
+    coeffs,
+    itertools.combinations_with_replacement(xand1, 4),
+  ):
+    yield coeff, collections.Counter(xs)
+
+def differentiatemonomial(coeffandxs, variable):
+  coeff, xs = coeffandxs
+  xs = collections.Counter(xs)
+  coeff *= xs[variable]
+  if coeff: xs[variable] -= 1
+  return coeff, xs
+
+def getquartic4dgradientstrings(coeffs):
+  monomials = tuple(getquartic4dmonomials(coeffs))
+  derivatives = [], [], [], []
+  variablesandderivatives = zip("wxyz", derivatives)
+  for coeffandxs in monomials:
+    for variable, derivative in variablesandderivatives:
+      coeff, xs = differentiatemonomial(coeffandxs, variable)
+      if coeff: derivative.append("*".join(itertools.chain((repr(coeff),), xs.elements())))
+  return [" + ".join(_) + ";" for _ in derivatives]
+
+def findcriticalpointsquartic4d(coeffs, cmdline=hom4pswrapper.smallparalleltdegnopostcmdline(), verbose=False):
+  p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+  stdin = "\n".join(["{"] + getquartic4dgradientstrings(coeffs) + ["}"])
+  out, err = p.communicate(stdin)
+  if verbose: print out
+  for solution in out.split("\n\n"):
+    if "This solution appears to be real" in solution:
+      yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
+
+def minimizequartic4d(coeffs, verbose=False, **kwargs):
   quartic = getquartic4d(coeffs)
-  quarticjacobian = autograd.jacobian(quartic)
-  quartichessian = autograd.hessian_vector_product(quartic)
-  result = optimize.basinhopping(
-    func=quartic,
-    x0=np.array([1., 1., -5., 3.]),
-    minimizer_kwargs=dict(
-      jac=quarticjacobian,
-      hess=quartichessian,
-    ),
-  )
-  print
-  return result
+  criticalpoints = findcriticalpointsquartic4d(coeffs, verbose=verbose, **kwargs)
+  minimum = float("inf")
+  for cp in criticalpoints:
+    value = quartic(cp)
+    if verbose: print cp, value
+    minimum = min(minimum, value)
+  return minimum
 
 if __name__ == "__main__":
-  a = np.array([1 if i in (0, 69, 35, 55, 65) else -1 if i in (5,) else 0 for i in xrange(70)])
-  print minimizequartic4d(a)
+  print minimizequartic4d(range(70), verbose=True, cmdline=hom4pswrapper.smallcmdline())
