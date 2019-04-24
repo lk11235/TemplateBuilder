@@ -36,7 +36,7 @@ class ConstrainedTemplatesBase(object):
   def __init__(self, templates, logfile=None):
     self.__templates = templates
     if len(templates) != self.ntemplates:
-      raise ValueError("Wrong number of templates ({}) for {}, should be {}".format(len(templates), type(self).__name__, ntemplates))
+      raise ValueError("Wrong number of templates ({}) for {}, should be {}".format(len(templates), type(self).__name__, self.ntemplates))
     self.__logfile = logfile
 
   @property
