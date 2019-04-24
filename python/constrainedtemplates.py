@@ -18,7 +18,7 @@ else:
 
 from uncertainties import ufloat
 
-from moremath import minimizequartic, weightedaverage
+from moremath import minimizequartic, minimizequartic4d, weightedaverage
 
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
@@ -584,7 +584,7 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
 
   @staticmethod
   def constraint(x):
-    assert False
+    return np.array([minimizequartic4d(x)])
 
   constraintmin = np.finfo(np.float).eps
   constraintmax = np.inf
