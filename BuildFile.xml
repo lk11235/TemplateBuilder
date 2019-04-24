@@ -1,5 +1,7 @@
 <flags ADD_SUBDIR="1" />
 
+<flags SKIP_FILES="$$(shell make -f ${CMSSW_BASE}/src/TemplateBuilder/TemplateBuilder/makeUnpackHom4PS all)"/>
+
 <flags CPPFLAGS="-I$(CMSSW_BASE)/src/TemplateBuilder/TemplateBuilder/include/ -I$(CMSSW_BASE)/src/TemplateBuilder/TemplateBuilder/include/external/" />
 
 <use name="boost"/>

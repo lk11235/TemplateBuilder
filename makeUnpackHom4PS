@@ -1,0 +1,39 @@
+SHELL := /bin/bash
+
+TemplateBuilder = ${CMSSW_BASE}/src/TemplateBuilder/TemplateBuilder
+scripts = hom4ps-core hom4ps-easy hom4ps-fast hom4ps-real hom4ps-small mixvol
+libraries = libhom4ps.so libmixcell.so liboptions.so
+
+define SCRIPT
+$(TemplateBuilder)/scripts/$(1): $(TemplateBuilder)/data/usr/
+	cp $(TemplateBuilder)/data/usr/bin/$(1) $(TemplateBuilder)/scripts/
+endef
+
+#$(foreach i,$(scripts),$(eval $(call SCRIPT,$(i))))
+
+define LIB
+${CMSSW_BASE}/lib/${SCRAM_ARCH}/$(1): $(TemplateBuilder)/data/usr/
+	cp $(TemplateBuilder)/data/usr/lib64/$(1) ${CMSSW_BASE}/lib/${SCRAM_ARCH}
+endef
+
+$(foreach i,$(libraries),$(eval $(call LIB,$(i))))
+
+${CMSSW_BASE}/include/hom4ps/: $(TemplateBuilder)/data/usr/
+	cp -r $(TemplateBuilder)/data/usr/include/hom4ps/ ${CMSSW_BASE}/include/
+
+$(TemplateBuilder)/data/usr/: $(TemplateBuilder)/data/hom4ps-3.2.2-Linux.rpm
+	{ \
+	  set -euo pipefail; \
+	  cd $(TemplateBuilder)/data/; \
+	  export LD_LIBRARY_PATH=$$(echo $$LD_LIBRARY_PATH | tr : '\n' | grep -v $$CMSSW_VERSION | tr '\n' : | sed "s/:*$$//") 1>&2; \
+	  rpm2cpio ./hom4ps-3.2.2-Linux.rpm | cpio -idmv; \
+	}
+
+allscripts = $(foreach i,$(scripts),$(TemplateBuilder)/scripts/$(i))
+
+alllibraries = $(foreach i,$(libraries),${CMSSW_BASE}/lib/${SCRAM_ARCH}/$(i))
+
+clean:
+	rm -rf $(foreach i,$(scripts) $(libraries),$(i)) ${CMSSW_BASE}/include/hom4ps/ $(TemplateBuilder)/data/usr/
+
+all: $(allscripts) $(alllibraries) ${CMSSW_BASE}/include/hom4ps/

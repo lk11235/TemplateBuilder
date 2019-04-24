@@ -1,0 +1,2 @@
+#!/bin/bash
+$CMSSW_BASE/src/TemplateBuilder/TemplateBuilder/data/usr/bin/hom4ps-small "$@"
