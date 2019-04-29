@@ -128,4 +128,4 @@ def minimizequartic4d(coeffs, verbose=False, **kwargs):
   return minimum
 
 if __name__ == "__main__":
-  print minimizequartic4d(range(70), verbose=True, cmdline=hom4pswrapper.smallcmdline())
+  print minimizequartic4d(np.random.rand(70), verbose=True)

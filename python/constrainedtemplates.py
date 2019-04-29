@@ -302,10 +302,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
 
     constraint = self.constraint
-    constraintjacobian = autograd.jacobian(constraint)
-    constrainthessianv = autograd.linear_combination_of_hessians(constraint)
-
-    nonlinearconstraint = optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
@@ -347,6 +343,20 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
       bounds = self.bounds(fitstartpoint, multiply)
 
+      if self.minimizemethod == "trust-constr":
+        constraintjacobian = autograd.jacobian(constraint)
+        constrainthessianv = autograd.linear_combination_of_hessians(constraint)
+        constraints = [optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)]
+      elif self.minimizemethod == "COBYLA":
+        constraints = [
+          {
+            "type": "ineq",
+            "fun": constraint,
+          }
+        ]
+      else:
+        assert False, self.minimizemethod
+
       try:
         if tuple(startpoint) not in self.__fitresultscache:
           #use startpoint as the key, not fitstartpoint,
@@ -355,10 +365,10 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
           fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.minimize(
             negativeloglikelihood,
             fitstartpoint,
-            method='trust-constr',
+            method=self.minimizemethod,
             jac=nlljacobian,
             hess=nllhessian,
-            constraints=[nonlinearconstraint],
+            constraints=constraints,
             bounds=bounds,
             options = {},
           )
@@ -415,6 +425,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       #the simple way to do this is to increase the pure components by some factor
       increasepureindices = np.array([1 if i in self.pureindices else 0 for i, _ in enumerate(startpoint)])
       def functiontosolvefor0(x):
+        print(x, constraint(startpoint * (increasepureindices*x + 1))[constraintidx] - constraintmin)
         return constraint(startpoint * (increasepureindices*x + 1))[constraintidx] - constraintmin
       assert functiontosolvefor0(0) < 0
 
@@ -422,7 +433,11 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if functiontosolvefor0(x) > 0:
           break
 
-      increaseby = optimize.newton(functiontosolvefor0, x-0.5, fprime=autograd.grad(functiontosolvefor0), fprime2=autograd.grad(autograd.grad(functiontosolvefor0)))
+      fprime = fprime2 = None
+      if self.candifferentiateconstraint:
+        fprime = autograd.grad(functiontosolvefor0)
+        fprime2 = autograd.grad(fprime)
+      increaseby = optimize.brentq(functiontosolvefor0, x-1, x)
 
       for i in xrange(10000):
         result = startpoint * (increasepureindices*increaseby + 1)
@@ -455,6 +470,10 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       )
     return negativeloglikelihood
 
+  @abc.abstractproperty
+  def minimizemethod(self): "can be a class member"
+  @abc.abstractproperty
+  def candifferentiateconstraint(self): "can be a class member"
   @abc.abstractmethod
   def constraint(self, x): "can be static"
   @abc.abstractproperty
@@ -468,6 +487,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
+  minimizemethod = "trust-constr"
+  candifferentiateconstraint = True
 
   @staticmethod
   def constraint(x):
@@ -481,6 +502,8 @@ class OneParameterggH(ConstrainedTemplatesWithFit):
 class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
   pureindices = 0, 4
+  minimizemethod = "trust-constr"
+  candifferentiateconstraint = True
 
   @staticmethod
   def constraint(x):
@@ -506,6 +529,8 @@ class FourParameterggH(ConstrainedTemplatesWithFit):
     "l",
   )
   pureindices = 0, 5, 9, 12, 14
+  minimizemethod = "trust-constr"
+  candifferentiateconstraint = True
 
   @staticmethod
   def constraint(x):
@@ -581,6 +606,8 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
 
   )
   pureindices = 0, 35, 55, 65, 69
+  minimizemethod = "COBYLA"
+  candifferentiateconstraint = False
 
   @staticmethod
   def constraint(x):
