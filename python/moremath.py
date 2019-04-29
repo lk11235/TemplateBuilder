@@ -107,9 +107,11 @@ def getquartic4dgradientstrings(coeffs):
   return [" + ".join(_) + ";" for _ in derivatives]
 
 def findcriticalpointsquartic4d(coeffs, cmdline=hom4pswrapper.smallparalleltdegnopostcmdline(), verbose=False):
-  p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+  p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   stdin = "\n".join(["{"] + getquartic4dgradientstrings(coeffs) + ["}"])
   out, err = p.communicate(stdin)
+  if "error" in err:
+    raise RuntimeError("hom4ps printed an error message.\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+out+"\n\nstderr:\n\n"+err)
   if verbose: print out
   for solution in out.split("\n\n"):
     if "This solution appears to be real" in solution:
