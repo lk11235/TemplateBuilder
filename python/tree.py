@@ -4,9 +4,10 @@ from fileio import RootCd, RootFile
 from templatecomponent import TemplateComponent
 
 class Tree(object):
-  def __init__(self, filename, treename):
+  def __init__(self, filename, treename, debug=False):
     self.__filename = filename
     self.__treename = treename
+    self.__debug = debug
     self.__entered = False
     self.__iterated = False
     self.__templatecomponentargs = []
@@ -99,6 +100,7 @@ class Tree(object):
       yield entry
       if i % 10000 == 0 or i == len(self):
         print "{} / {}".format(i, len(self))
+        if self.__debug: break
 
   def fillall(self):
     print

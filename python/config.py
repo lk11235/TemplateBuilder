@@ -229,6 +229,7 @@ class TemplateBuilder(object):
     self.__printbins = tuple(kwargs.pop("printbins", ()))
     self.__printallbins = kwargs.pop("printallbins", False)
     self.__force = kwargs.pop("force", False)
+    self.__debug = kwargs.pop("debug", False)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
 
@@ -241,12 +242,14 @@ class TemplateBuilder(object):
       for templateconfig in config["templates"]:
         for filename in templateconfig["files"]:
           treeargs.add((os.path.join(config["inputDirectory"], filename), templateconfig["tree"]))
-    alltrees = {Tree(*args) for args in treeargs}
+    alltrees = {Tree(*args, debug=self.__debug) for args in treeargs}
 
     outfilenames = [config["outputFile"] for config in self.__configs]
     for outfilename in outfilenames:
       if not outfilename.endswith(".root"):
         raise ValueError(outfilename+" doesn't end with .root")
+      if self.__debug:
+        outfilenames = [re.sub("[.]root$", "_debug.root", outfilename) for outfilename in outfilenames]
     logfilenames = [re.sub("[.]root$", ".log", outfilename) for outfilename in outfilenames]
     assert not set(logfilenames) & set(outfilenames), set(logfilenames) & set(outfilenames)
 
