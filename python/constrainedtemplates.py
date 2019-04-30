@@ -333,21 +333,30 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         {}
       """)
 
-      multiply = 10 ** -min(np.floor(np.log10(abs(startpoint))))
-      startpoint *= multiply
-      fitstartpoint = self.adjuststartpoint(startpoint, constraint, self.constraintmin, self.constraintmax)
+      try:
+        multiply = 10 ** -min(np.floor(np.log10(abs(startpoint[np.nonzero(startpoint)]))))
+        startpoint *= multiply
+        fitstartpoint = self.adjuststartpoint(startpoint, constraint, self.constraintmin, self.constraintmax)
+      except:
+        print("Error (probably a math error) involving startpoint:")
+        print(startpoint)
+        print()
+        raise
 
       negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents, multiply=multiply)
-      nlljacobian = autograd.jacobian(negativeloglikelihood)
-      nllhessian = autograd.hessian(negativeloglikelihood)
-
-      bounds = self.bounds(fitstartpoint, multiply)
 
       if self.minimizemethod == "trust-constr":
+        nlljacobian = autograd.jacobian(negativeloglikelihood)
+        nllhessian = autograd.hessian(negativeloglikelihood)
+
+        bounds = self.bounds(fitstartpoint, multiply)
+
         constraintjacobian = autograd.jacobian(constraint)
         constrainthessianv = autograd.linear_combination_of_hessians(constraint)
         constraints = [optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)]
+
       elif self.minimizemethod == "COBYLA":
+        nlljacobian = nllhessian = bounds = None
         constraints = [
           {
             "type": "ineq",
