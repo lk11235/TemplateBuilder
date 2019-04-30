@@ -86,6 +86,17 @@ class ConstrainedTemplatesBase(object):
 
       return bincontents
 
+  def getcomponentbincontentsabs(self, x, y, z):
+      bincontents = []
+
+      for _ in self.templates:
+        thisonescontent = {}
+        bincontents.append(thisonescontent)
+        for component in _.templatecomponents:
+          thisonescontent[component.name.replace(_.name+"_", "")] = component.GetBinContentErrorAbs(x, y, z)
+
+      return bincontents
+
   def write(self, thing):
     print(thing)
     if self.__logfile is not None:
@@ -109,11 +120,12 @@ class ConstrainedTemplatesBase(object):
 
     for x, y, z in self.binsxyz:
       bincontents = self.getcomponentbincontents(x, y, z)
+      bincontentsabs = self.getcomponentbincontentsabs(x, y, z)
 
       assert len({frozenset(_) for _ in bincontents}) == 1  #they should all have the same keys
 
       try:
-        finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents)
+        finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents, bincontentsabs)
       except:
         print("Error when finding content for bin", x, y, z)
         raise
@@ -160,7 +172,7 @@ class ConstrainedTemplatesBase(object):
 
 
   @abc.abstractmethod
-  def computefinalbincontents(self, bincontents): pass
+  def computefinalbincontents(self, bincontents, bincontentsabs): pass
 
   def applymirrortoarray(self, array):
     if len(self.templates) != len(array):
@@ -170,53 +182,26 @@ class ConstrainedTemplatesBase(object):
       for t, s in itertools.izip(self.templates, array)
     ])
 
-  def findoutliers(self, bincontent):
+  def findoutliers(self, bincontent, bincontentabs):
     bincontent = bincontent.copy()
+    bincontentabs = bincontentabs.copy()
 
-    if all(_.s == 0 for _ in bincontent.itervalues()): return frozenset()
+    relativeerror = {name: contentabs.s / contentabs.n if contentabs.n else float("inf") for name, contentabs in bincontentabs.iteritems()}
+    outliers = {}
 
-    #remove outliers:
-    #first try to use all the templatecomponents, then try one, then two, etc.
-    for i in xrange(len(bincontent)-1):
-      significances = {}
-      #for each number: loop through the combinations of templatecomponents to possibly remove
-      for namestomayberemove in itertools.combinations(bincontent, i):
-        contentstomayberemove = tuple(bincontent[_] for _ in namestomayberemove)
-        for name, content in bincontent.iteritems():
-          #for each remaining templatecomponent, find the unbiased residual between its bin content
-          #and the bin content predicted by the other remaining components
-          if name in namestomayberemove: continue
-          newunbiasedresidual = (
-            content
-            - weightedaverage(othercontent
-              for othername, othercontent in bincontent.iteritems()
-              if othername != name and othername not in namestomayberemove
-            )
-          )
-          significance = abs(newunbiasedresidual.n) / content.s
-          #if there's a 5sigma difference, then this combination of templatecomponents to remove is no good
-          if significance > 5: break #out of the loop over remaining names
-        else:
-          #no remaining unbiased residuals are 5sigma
-          #that means this combination of templatecomponents is a candidate to remove
-          #if multiple combinations of the same number of templatecomponents fit this criterion,
-          #then we pick the one that itself has the biggest normalized residual from the other templatecomponents
-          #therefore we store it in significances
-          if contentstomayberemove:
-            unbiasedresidual = (
-              weightedaverage(contentstomayberemove)
-              - weightedaverage(othercontent for othername, othercontent in bincontent.iteritems() if othername not in namestomayberemove)
-            )
-            significances[namestomayberemove] = abs(unbiasedresidual.n) / weightedaverage(contentstomayberemove).s
-          else:
-            significances[namestomayberemove] = float("inf")
+    for name in bincontent:
+      if relativeerror[name] < 0.7: continue
+      errortoset = None
+      for othername in bincontent:
+        #look at the other names that have bigger errors but comparable relative errors
+        if bincontentabs[othername].s < bincontentabs[name].s: continue
+        if relativeerror[othername] <= relativeerror[name] * 1.2:
+          if errortoset is None: errortoset = 0
+          errortoset = max(errortoset, bincontentabs[othername].s)
+      if errortoset is not None:
+        outliers[name] = ufloat(bincontent[name].n, errortoset)
 
-      if significances:
-        nameswithmaxsignificance, maxsignificance = max(significances.iteritems(), key=lambda x: x[1])
-        return nameswithmaxsignificance
-        break
-
-    return frozenset()
+    return outliers
 
   def purebincontents(self, x, y, z):
     for t in self.puretemplates:
@@ -230,20 +215,18 @@ class OneTemplate(ConstrainedTemplatesBase):
   templatenames = "",
   pureindices = 0, 2
 
-  def computefinalbincontents(self, bincontents):
-    bincontent = bincontents[0]
+  def computefinalbincontents(self, bincontents, bincontentsabs):
+    bincontent = bincontents[0].copy()
+    originalbincontent = copy.deepcopy(bincontent)
+    bincontentabs = bincontentsabs[0].copy()
     nbincontents = len(bincontent)
 
-    namestoremove = self.findoutliers(bincontent)
-
     warning = []
-    if namestoremove:
-      warning.append("there are outliers: " + ", ".join(sorted(namestoremove)))
-    for name in namestoremove:
-      del bincontent[name]
 
-    if len(bincontent) < nbincontents / 2.:
-      raise RuntimeError("Removed more than half of the bincontents!  Please check.\n" + "\n".join("  {:45} {:10.3e}".format(component.name, component.GetBinContentError(x, y, z)) for component in template.templatecomponents))
+    outliers = self.findoutliers(bincontent, bincontentabs)
+    bincontent.update(outliers)
+    if outliers:
+      warning.append("some errors have been inflated: " + ", ".join(sorted(outliers)))
 
     if all(_.n == _.s == 0 for _ in bincontent.itervalues()):  #special case, empty bin
       finalbincontent = bincontent.values()[0]
@@ -252,17 +235,23 @@ class OneTemplate(ConstrainedTemplatesBase):
 
     thingtoprint = ""
     fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+    fmt2 = fmt + " (originally {:10.3e})"
     for name, content in bincontent.iteritems():
-      thingtoprint += "\n"+fmt.format(name, content)
+      if content.n == originalcontent[name].n and content.s == originalcontent[name].s:
+        thingtoprint += "\n"+fmt.format(name, content)
+      else:
+        thingtoprint += "\n"+fmt2.format(name, content, originalcontent[name])
+
     thingtoprint += "\n"+fmt.format("final", finalbincontent)
 
     return [finalbincontent], thingtoprint, warning
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
-  def computefinalbincontents(self, bincontents):
+  def computefinalbincontents(self, bincontents, bincontentsabs):
     warning = []
 
     bincontents = copy.deepcopy(bincontents)
+    bincontentsabs = copy.deepcopy(bincontentsabs)
     originalbincontents = copy.deepcopy(bincontents)
     nbincontents = len(bincontents[0])
 
@@ -272,7 +261,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     x0 = [[] for t in self.templates]
     sigma = [[] for t in self.templates]
 
-    for bincontent, t in itertools.izip(bincontents, self.templates):
+    for bincontent, bincontentabs, t in itertools.izip(bincontents, bincontentsabs, self.templates):
       for name in list(bincontent):
         if (
           bincontent[name].n == 0    #0 content - maginfy error to the maximum error
@@ -283,11 +272,10 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         ):
           bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues()))
 
-      outliers = self.findoutliers(bincontent)
+      outliers = self.findoutliers(bincontent, bincontentabs)
+      bincontent.update(outliers)
       if outliers:
-        warning.append("there are outliers for "+t.name+": "+", ".join(sorted(outliers)))
-      for name in outliers:
-        bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues() if othercontent.n != 0))
+        warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outliers)))
 
     for name in bincontents[0]:
       for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):

@@ -120,6 +120,8 @@ class TemplateComponent(object):
 
   def GetBinContentError(self, *args):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
+  def GetBinContentErrorAbs(self, *args):
+    return uncertainties.ufloat(self.__habs.GetBinContent(*args), self.__habs.GetBinError(*args))
 
   @property
   def binsxyz(self):
@@ -141,6 +143,7 @@ class TemplateComponent(object):
       for x, y, z in self.binsxyz:
         if self.__h.GetBinError(x, y, z) == 0:
           self.__h.SetBinError(x, y, z, errortoset)
+          self.__habs.SetBinError(x, y, z, errortoset)
 
     self.__locked = True
 
