@@ -182,7 +182,7 @@ class ConstrainedTemplatesBase(object):
       for t, s in itertools.izip(self.templates, array)
     ])
 
-  def findoutliers(self, bincontent, bincontentabs):
+  def findoutliers(self, bincontent, bincontentabs, debugprint=False):
     bincontent = bincontent.copy()
     bincontentabs = bincontentabs.copy()
 
@@ -190,12 +190,16 @@ class ConstrainedTemplatesBase(object):
     outliers = {}
 
     for name in bincontent:
+      if debugprint: print(name, bincontent[name], relativeerror[name], bincontentabs[name])
       if relativeerror[name] < 0.7: continue
+      if debugprint: print("still here!")
       errortoset = None
       for othername in bincontent:
         #look at the other names that have bigger errors but comparable relative errors
         if bincontentabs[othername].s < bincontentabs[name].s: continue
-        if relativeerror[othername] <= relativeerror[name] * 1.2:
+        if debugprint: print("here with", othername)
+        if relativeerror[othername] <= relativeerror[name] * 1.4:
+          if debugprint: print("here 2 with", othername)
           if errortoset is None: errortoset = 0
           errortoset = max(errortoset, bincontentabs[othername].s)
       if errortoset is not None:
@@ -307,7 +311,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     fmt2 = fmt1 + " (was +/-{:10.3e})"
     fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
     fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
-    for i, (t, thisonescontent, originalcontent, abscontent) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
+    for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
       thingtoprint += "\n"+t.name+":"
       for name, content in sorted(thisonescontent.iteritems()):
         fmt = {
@@ -418,7 +422,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
-      thingtoprint += "\n"+fmt.format("final "+name, content)
+      thingtoprint += "\n"+fmt1.format("final "+name, content)
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
 

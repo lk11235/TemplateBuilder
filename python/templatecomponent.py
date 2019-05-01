@@ -39,6 +39,8 @@ class TemplateComponent(object):
     if hkey and habskey:
       self.__h = hkey.ReadObj()
       self.__habs = habskey.ReadObj()
+      self.__h.SetDirectory(0)
+      self.__habs.SetDirectory(0)
       self.__locked = True
     else:
       self.__h = ROOT.TH3F(
