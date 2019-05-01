@@ -231,6 +231,7 @@ class TemplateBuilder(object):
     self.__force = kwargs.pop("force", False)
     self.__debug = kwargs.pop("debug", False)
     self.__useexistingcomponents = kwargs.pop("useexistingcomponents", False)
+    self.__binsortkey = kwargs.pop("binsortkey", None)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
 
@@ -326,7 +327,7 @@ class TemplateBuilder(object):
           tree.fillall()
 
       for constraint in constraints:
-        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins)
+        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins, binsortkey=self.__binsortkey)
 
       for template in templates:
         if not template.finalized:

@@ -102,7 +102,7 @@ class ConstrainedTemplatesBase(object):
     if self.__logfile is not None:
       self.__logfile.write(thing+"\n")
 
-  def makefinaltemplates(self, printbins, printallbins):
+  def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
     printbins = tuple(tuple(_) for _ in printbins)
     assert all(len(_) == 3 for _ in printbins)
     self.write("Making the final templates:")
@@ -118,7 +118,7 @@ class ConstrainedTemplatesBase(object):
         component.lock()
         self.write("  {:45} {:10.3e}".format(component.name, component.integral))
 
-    for x, y, z in self.binsxyz:
+    for x, y, z in sorted(self.binsxyz, key=binsortkey):
       bincontents = self.getcomponentbincontents(x, y, z)
       bincontentsabs = self.getcomponentbincontentsabs(x, y, z)
 
