@@ -2,9 +2,10 @@ import contextlib
 import os
 
 class RootFile(object):
-  def __init__(self, filename, *args):
+  def __init__(self, filename, *args, **kwargs):
     self.__filename = filename
     self.__args = args
+    self.__deleteifbad = kwargs.pop("deleteifbad", False)
     self.__entered = False
   def __enter__(self):
     import ROOT
@@ -16,14 +17,29 @@ class RootFile(object):
     if self.IsZombie():
       self.__exit__()
       raise IOError(self.__filename+" is a zombie, see above for details.")
-    self.__write = bool(self.GetBytesWritten())
+
+    try:
+      openoption = self.__args[0].upper()
+    except IndexError:
+      openoption = ""
+
+    self.__write = {
+      "": False,
+      "READ": False,
+      "NEW": True,
+      "CREATE": True,
+      "RECREATE": True,
+      "UPDATE": True,
+    }[openoption]
+
     return self
+
   def __exit__(self, *errorstuff):
-    if self.__write and not any(errorstuff):
+    if self.__write and (not any(errorstuff) or not self.__deleteifbad):
       self.Write()
     self.Close()
     self.__bkpdirectory.cd()
-    if self.__write and any(errorstuff):
+    if self.__write and self.__deleteifbad and any(errorstuff):
       os.remove(self.__filename)
   def __getattr__(self, attr):
     if self.__entered:

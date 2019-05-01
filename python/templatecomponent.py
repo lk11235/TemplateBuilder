@@ -29,36 +29,54 @@ class TemplateComponent(object):
     self.__cuttreeformula = cuttreeformula
     self.__weighttreeformula = weighttreeformula
 
-    self.__h = ROOT.TH3F(
-      name, name,
-      xbins, xmin, xmax,
-      ybins, ymin, ymax,
-      zbins, zmin, zmax,
-    )
+    self.__tdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
 
-    self.__habs = ROOT.TH3F(
-      name+"_absweights", name+"_absweights",
-      xbins, xmin, xmax,
-      ybins, ymin, ymax,
-      zbins, zmin, zmax,
-    )
-    self.__habs.SetDirectory(0)
+    nameabs = name+"_absweights"
 
-    self.__forcewithinlimitsx = functools.partial(
-      self.forcewithinlimits,
-      xmin + (xmax - xmin) / xbins / 10, 
-      xmax - (xmax - xmin) / xbins / 10, 
-    )
-    self.__forcewithinlimitsy = functools.partial(
-      self.forcewithinlimits,
-      ymin + (ymax - ymin) / ybins / 10, 
-      ymax - (ymax - ymin) / ybins / 10, 
-    )
-    self.__forcewithinlimitsz = functools.partial(
-      self.forcewithinlimits,
-      zmin + (zmax - zmin) / zbins / 10, 
-      zmax - (zmax - zmin) / zbins / 10, 
-    )
+    hkey = self.__tdirectory.FindKey(name)
+    habskey = self.__tdirectory.FindKey(nameabs)
+
+    if name.endswith("L1"):
+      assert hkey and habskey
+
+    if hkey and habskey:
+      self.__h = hkey.ReadObj()
+      self.__habs = habskey.ReadObj()
+      self.__locked = True
+    else:
+      self.__h = ROOT.TH3F(
+        name, name,
+        xbins, xmin, xmax,
+        ybins, ymin, ymax,
+        zbins, zmin, zmax,
+      )
+
+      self.__habs = ROOT.TH3F(
+        nameabs, nameabs,
+        xbins, xmin, xmax,
+        ybins, ymin, ymax,
+        zbins, zmin, zmax,
+      )
+
+      self.__h.SetDirectory(0)
+      self.__habs.SetDirectory(0)
+
+      self.__forcewithinlimitsx = functools.partial(
+        self.forcewithinlimits,
+        xmin + (xmax - xmin) / xbins / 10,
+        xmax - (xmax - xmin) / xbins / 10,
+      )
+      self.__forcewithinlimitsy = functools.partial(
+        self.forcewithinlimits,
+        ymin + (ymax - ymin) / ybins / 10,
+        ymax - (ymax - ymin) / ybins / 10,
+      )
+      self.__forcewithinlimitsz = functools.partial(
+        self.forcewithinlimits,
+        zmin + (zmax - zmin) / zbins / 10,
+        zmax - (zmax - zmin) / zbins / 10,
+      )
+      self.__locked = False
 
     self.__xbins = xbins
     self.__ybins = ybins
@@ -69,8 +87,6 @@ class TemplateComponent(object):
 
     assert uncertainties.std_dev(scaleby) == 0
     self.__scaleby = uncertainties.nominal_value(scaleby)
-
-    self.__locked = False
 
   @staticmethod
   def forcewithinlimits(lower, upper, value):
@@ -145,6 +161,9 @@ class TemplateComponent(object):
           self.__h.SetBinError(x, y, z, errortoset)
           self.__habs.SetBinError(x, y, z, errortoset)
 
+    self.__h.SetDirectory(self.__tdirectory)
+    self.__habs.SetDirectory(self.__tdirectory)
+
     self.__locked = True
 
   @property
@@ -153,3 +172,6 @@ class TemplateComponent(object):
   @property
   def printprefix(self):
     return self.__printprefix
+  @property
+  def locked(self):
+    return self.__locked

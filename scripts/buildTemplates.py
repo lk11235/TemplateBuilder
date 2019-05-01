@@ -8,7 +8,9 @@ if __name__ == "__main__":
   p.add_argument("configfile", nargs="+")
   p.add_argument("--print-bin", action="append", default=[], type=int, nargs=3)
   p.add_argument("--print-all-bins", action="store_true")
-  p.add_argument("--force", "-f", action="store_true")
+  g = p.add_mutually_exclusive_group()
+  g.add_argument("--force", "-f", action="store_true")
+  g.add_argument("--use-existing-components", action="store_true")
   p.add_argument("--debug", action="store_true", help="only run 10000 events per tree.  files will be saved as (filename)_debug.root")
   args = p.parse_args()
 
@@ -16,4 +18,4 @@ if __name__ == "__main__":
   warnings.simplefilter("error")
   warnings.filterwarnings(action='ignore', category=RuntimeWarning, message=r'creating converter for unknown type "const char\*\[\]".*')
 
-  TemplateBuilder(*args.configfile, printbins=args.print_bin, printallbins=args.print_all_bins, force=args.force, debug=args.debug).maketemplates()
+  TemplateBuilder(*args.configfile, printbins=args.print_bin, printallbins=args.print_all_bins, force=args.force, useexistingcomponents=args.use_existing_components, debug=args.debug).maketemplates()

@@ -12,6 +12,7 @@ class Tree(object):
     self.__iterated = False
     self.__templatecomponentargs = []
     self.__templatecomponents = []
+    self.__templatecomponentstofill = []
 
   @property
   def filename(self): return self.__filename
@@ -41,7 +42,12 @@ class Tree(object):
 
     import ROOT
 
-    kwargs["directory"] = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
+    subdirname = kwargs.pop("subdirectory")
+    subdir = ROOT.gDirectory.Get(subdirname)
+    if not subdir:
+      subdir = ROOT.gDirectory.mkdir(subdirname)
+    assert subdir
+    kwargs["directory"] = subdir
     self.__templatecomponentargs.append((args, kwargs))
     index = len(self.__templatecomponentargs)-1
     return lambda: self.__templatecomponents[index]
@@ -67,17 +73,18 @@ class Tree(object):
             raise ValueError("Bad branch "+branch+" in "+str(self))
 
     with RootCd(directory):
-      self.__templatecomponents.append(
-        TemplateComponent(
-          name, printprefix,
-          ROOT.TTreeFormula(name+"_x", xformula, self.__t), xbins, xmin, xmax,
-          ROOT.TTreeFormula(name+"_y", yformula, self.__t), ybins, ymin, ymax,
-          ROOT.TTreeFormula(name+"_z", zformula, self.__t), zbins, zmin, zmax,
-          ROOT.TTreeFormula(name+"_cut", cutformula, self.__t),
-          ROOT.TTreeFormula(name+"_weight", weightformula, self.__t),
-          mirrortype, scaleby,
-        )
+      tc = TemplateComponent(
+        name, printprefix,
+        ROOT.TTreeFormula(name+"_x", xformula, self.__t), xbins, xmin, xmax,
+        ROOT.TTreeFormula(name+"_y", yformula, self.__t), ybins, ymin, ymax,
+        ROOT.TTreeFormula(name+"_z", zformula, self.__t), zbins, zmin, zmax,
+        ROOT.TTreeFormula(name+"_cut", cutformula, self.__t),
+        ROOT.TTreeFormula(name+"_weight", weightformula, self.__t),
+        mirrortype, scaleby,
       )
+      self.__templatecomponents.append(tc)
+      if not tc.locked:
+        self.__templatecomponentstofill.append(tc)
 
   def __str__(self):
     return "{}:{}".format(self.__filename, self.__treename)
@@ -93,6 +100,7 @@ class Tree(object):
     if self.__iterated:
       raise ValueError("Already iterated through {}".format(self))
     self.__iterated = True
+    if not self.__templatecomponentstofill: return
 
     print "Iterating through {} ({} entries)".format(self, self.__t.GetEntries())
 
@@ -105,11 +113,11 @@ class Tree(object):
   def fillall(self):
     print
     print "Filling:"
-    for _ in self.__templatecomponents:
+    for _ in self.__templatecomponentstofill:
        print "  {:40} {:45}".format(_.printprefix, _.name)
     print
     for entry in self:
-      for _ in self.__templatecomponents:
+      for _ in self.__templatecomponentstofill:
         _.fill()
     print
     print "Integrals:"

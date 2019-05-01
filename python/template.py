@@ -16,6 +16,7 @@ class Template(object):
     zformula, zbins, zmin, zmax,
     cutformula, weightformula,
     mirrortype, scaleby, floor,
+    reuseifexists=False,
   ):
     filenames = [tree.filename for tree in trees]
     commonprefix = os.path.commonprefix(filenames)
@@ -27,15 +28,6 @@ class Template(object):
     import ROOT
 
     self.__tdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
-
-    self.__h = ROOT.TH3F(
-      name, name,
-      xbins, xmin, xmax,
-      ybins, ymin, ymax,
-      zbins, zmin, zmax,
-    )
-
-    self.__h.SetDirectory(0)
 
     self.__xbins = xbins
     self.__ybins = ybins
@@ -50,7 +42,21 @@ class Template(object):
 
     self.__floor = floor
 
-    self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = False
+    hkey = self.__tdirectory.FindKey(name)
+    if reuseifexists and hkey:
+      self.__h = hkey.ReadObj()
+      self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = True
+    else:
+      self.__h = ROOT.TH3F(
+        name, name,
+        xbins, xmin, xmax,
+        ybins, ymin, ymax,
+        zbins, zmin, zmax,
+      )
+
+      self.__h.SetDirectory(0)
+
+      self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = False
 
     self.__templatecomponenthandles = [
       tree.registertemplatecomponent(
@@ -60,6 +66,7 @@ class Template(object):
         zformula, zbins, zmin, zmax,
         cutformula, weightformula,
         mirrortype, scaleby,
+        subdirectory=tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
       )
       for i, tree in enumerate(trees)
     ]

@@ -230,6 +230,7 @@ class TemplateBuilder(object):
     self.__printallbins = kwargs.pop("printallbins", False)
     self.__force = kwargs.pop("force", False)
     self.__debug = kwargs.pop("debug", False)
+    self.__useexistingcomponents = kwargs.pop("useexistingcomponents", False)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
 
@@ -258,7 +259,13 @@ class TemplateBuilder(object):
 
     templatesbyname = {}
 
-    with RootFiles(*outfilenames, commonargs=["RECREATE" if self.__force else "CREATE"]) as newfiles, opens(*logfilenames, commonargs="w") as logfiles:
+    fileopenoption = "CREATE"
+    if self.__force:
+      fileopenoption = "RECREATE"
+    if self.__useexistingcomponents:
+      fileopenoption = "UPDATE"
+
+    with RootFiles(*outfilenames, commonargs=[fileopenoption]) as newfiles, opens(*logfilenames, commonargs="w") as logfiles:
       for config, outfilename, outfile, logfile in itertools.izip(self.__configs, outfilenames, newfiles, logfiles):
         with RootCd(outfile):
           for templateconfig in config["templates"]:
@@ -294,7 +301,7 @@ class TemplateBuilder(object):
               templateconfig["variables"][1], templateconfig["binning"]["bins"][3], templateconfig["binning"]["bins"][4], templateconfig["binning"]["bins"][5],
               templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
               templateconfig["selection"], templateconfig["weight"],
-              mirrortype, scaleby, floor
+              mirrortype, scaleby, floor,
             )
 
             templates.append(template)
