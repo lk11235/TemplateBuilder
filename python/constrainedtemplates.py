@@ -287,7 +287,11 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     startpoint = np.array([weightedaverage(_.itervalues()).n for _ in bincontents])
     for i in self.pureindices:
-      if startpoint[i] == 0: startpoint[i] = np.finfo(np.float).eps
+      if startpoint[i] == 0:
+        if all(startpoint[i] <= np.finfo(float).eps for i in self.pureindices):
+          startpoint[i] = np.finfo(float).eps
+        else:
+          startpoint[i] = min(startpoint[i] for i in self.pureindices if startpoint[i] > np.finfo(float).eps)
 
     constraint = self.constraint
 
@@ -415,7 +419,11 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     )
 
   def adjuststartpoint(self, startpoint, constraint, constraintmin, constraintmax):
+    result = np.copy(startpoint)
+
     for constraintidx in xrange(len(constraint(startpoint))):
+      startpoint = result
+
       if (constraintmin < constraint(startpoint))[constraintidx]: continue
 
       #we want to adjust the start point in a reasonable way so that it fills the constraint
