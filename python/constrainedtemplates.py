@@ -232,15 +232,22 @@ class OneTemplate(ConstrainedTemplatesBase):
       finalbincontent = bincontent.values()[0]
     else:                                                      #normal case
       finalbincontent = weightedaverage(bincontent.itervalues())
-
     thingtoprint = ""
-    fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
-    fmt2 = fmt + " (originally {:10.3e})"
-    for name, content in bincontent.iteritems():
-      if content.n == originalcontent[name].n and content.s == originalcontent[name].s:
-        thingtoprint += "\n"+fmt.format(name, content)
-      else:
-        thingtoprint += "\n"+fmt2.format(name, content, originalcontent[name])
+    fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+    fmt2 = fmt1 + " (was +/-{:10.3e})"
+    fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
+    fmt4 = fmt2 + " (sum of abs weights {:10.3e})"
+    for i, (name, content) in enumerate(bincontent.iteritems()):
+      fmt = {
+        (True, True): fmt1,
+        (False, True): fmt2,
+        (True, False): fmt3,
+        (False, False): fmt4,
+      }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
+      fmtargs = [name, content]
+      if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name])
+      if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name])
+      thingtoprint += "\n"+fmt.format(*fmtargs)
 
     thingtoprint += "\n"+fmt.format("final", finalbincontent)
 
@@ -296,15 +303,23 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     constraint = self.constraint
 
     thingtoprint = ""
-    fmt = "      {:<%d} {:10.3e}" % max(len(name) for name in itertools.chain(*bincontents))
-    fmt2 = fmt + " (originally {:10.3e})"
-    for t, thisonescontent, originalcontent in itertools.izip(self.templates, bincontents, originalbincontents):
+    fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+    fmt2 = fmt1 + " (was +/-{:10.3e})"
+    fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
+    fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
+    for i, (t, thisonescontent, originalcontent, abscontent) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
       thingtoprint += "\n"+t.name+":"
       for name, content in sorted(thisonescontent.iteritems()):
-        if content.n == originalcontent[name].n and content.s == originalcontent[name].s:
-          thingtoprint += "\n"+fmt.format(name, content)
-        else:
-          thingtoprint += "\n"+fmt2.format(name, content, originalcontent[name])
+        fmt = {
+          (True, True): fmt1,
+          (False, True): fmt2,
+          (True, False): fmt3,
+          (False, False): fmt4,
+        }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
+        fmtargs = [name, content]
+        if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name].s)
+        if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
+        thingtoprint += "\n"+fmt.format(*fmtargs)
 
     constraintatstart = constraint(startpoint)
     if np.all(self.constraintmin <= constraintatstart) and np.all(constraintatstart <= self.constraintmax):
