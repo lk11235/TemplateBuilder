@@ -18,7 +18,7 @@ else:
 
 from uncertainties import ufloat
 
-from moremath import minimizequartic, minimizequartic4d, weightedaverage
+from moremath import kspoissongaussian, minimizequartic, minimizequartic4d, weightedaverage
 
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
@@ -191,14 +191,15 @@ class ConstrainedTemplatesBase(object):
 
     for name in bincontent:
       if debugprint: print(name, bincontent[name], relativeerror[name], bincontentabs[name])
-      if relativeerror[name] < 0.7: continue
       if debugprint: print("still here!")
       errortoset = None
       for othername in bincontent:
         #look at the other names that have bigger errors but comparable relative errors
         if bincontentabs[othername].s < bincontentabs[name].s: continue
         if debugprint: print("here with", othername)
-        if relativeerror[othername] <= relativeerror[name] * 1.4:
+        if relativeerror[othername] <= relativeerror[name] * (
+          (1+1.5*kspoissongaussian(1/relativeerror[name]**2))
+        ):
           if debugprint: print("here 2 with", othername)
           if errortoset is None: errortoset = 0
           errortoset = max(errortoset, bincontentabs[othername].s)

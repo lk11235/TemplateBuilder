@@ -8,6 +8,7 @@ import subprocess
 import autograd
 import autograd.numpy as np
 import scipy.optimize as optimize
+import scipy.stats as stats
 import uncertainties
 
 import hom4pswrapper
@@ -127,5 +128,15 @@ def minimizequartic4d(coeffs, verbose=False, **kwargs):
     minimum = min(minimum, value)
   return minimum
 
+def kspoissongaussian(mean, size=10000):
+  np.random.seed(123456)  #make it deterministic
+  return stats.ks_2samp(
+    np.random.poisson(mean, size=size),
+    np.random.normal(mean, mean**.5, size=size)
+  ).statistic
+
 if __name__ == "__main__":
-  print minimizequartic4d(np.random.rand(70), verbose=True)
+  for size in range(0, 10000, 100):
+    if not size: continue
+    a = [kspoissongaussian(5, size=size) for i in range(100)]
+    print "{:5d} {:5.2f} {:5.2f}".format(size, np.mean(a), np.std(a))
