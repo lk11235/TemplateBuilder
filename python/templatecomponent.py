@@ -36,9 +36,6 @@ class TemplateComponent(object):
     hkey = self.__tdirectory.FindKey(name)
     habskey = self.__tdirectory.FindKey(nameabs)
 
-    if name.endswith("L1"):
-      assert hkey and habskey
-
     if hkey and habskey:
       self.__h = hkey.ReadObj()
       self.__habs = habskey.ReadObj()
