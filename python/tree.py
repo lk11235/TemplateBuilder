@@ -4,10 +4,11 @@ from fileio import RootCd, RootFile
 from templatecomponent import TemplateComponent
 
 class Tree(object):
-  def __init__(self, filename, treename, debug=False):
+  def __init__(self, filename, treename, debug=False, verbose=False):
     self.__filename = filename
     self.__treename = treename
     self.__debug = debug
+    self.__verbose = verbose
     self.__entered = False
     self.__iterated = False
     self.__templatecomponentargs = []
@@ -112,15 +113,19 @@ class Tree(object):
 
   def fillall(self):
     print
-    print "Filling:"
-    for _ in self.__templatecomponentstofill:
-       print "  {:40} {:45}".format(_.printprefix, _.name)
-    print
+    if self.__verbose:
+      print "Filling:"
+      for _ in self.__templatecomponentstofill:
+         print "  {:40} {:45}".format(_.printprefix, _.name)
+      print
+    else:
+      print "Filling", len(self.__templatecomponentstofill), "templates"
     for entry in self:
       for _ in self.__templatecomponentstofill:
         _.fill()
-    print
-    print "Integrals:"
-    for _ in self.__templatecomponents:
-       print "  {:40} {:45} {:10.3e}".format(_.printprefix, _.name, _.integral)
-    print
+    if self.__verbose:
+      print
+      print "Integrals:"
+      for _ in self.__templatecomponents:
+        print "  {:40} {:45} {:10.3e}".format(_.printprefix, _.name, _.integral)
+      print
