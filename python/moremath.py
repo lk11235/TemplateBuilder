@@ -69,10 +69,10 @@ def minimizequartic(coeffs):
   if np.isnan(result): assert False, (coeffs, result)
   return np.real(result)
 
-def getquartic4d(coeffs):
+def getquartic4d(coeffs, mirrorw=False):
   def quartic4d(x):
     assert len(x) == 4
-    xand1 = np.array([1., x[0], x[1], x[2], x[3]])
+    xand1 = np.array([1., (-1)**mirrorw*x[0], x[1], x[2], x[3]])
     return sum(
       np.prod((coeff,) + xs)
       for coeff, xs in itertools.izip_longest(
@@ -82,14 +82,14 @@ def getquartic4d(coeffs):
     )
   return quartic4d
 
-def getquartic4dmonomials(coeffs):
+def getquartic4dmonomials(coeffs, mirrorw=False):
   xand1 = "1wxyz"
   for coeff, xs in itertools.izip_longest(
     coeffs,
     itertools.combinations_with_replacement(xand1, 4),
   ):
     ctr = collections.Counter(xs)
-    yield coeff, ctr
+    yield coeff * (-1)**(mirrorw * ctr["w"]), ctr
 
 def differentiatemonomial(coeffandxs, variable):
   coeff, xs = coeffandxs
