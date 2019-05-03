@@ -326,7 +326,13 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
         thingtoprint += "\n"+fmt.format(*fmtargs)
 
-    constraintatstart = constraint(startpoint)
+    mirroredstartpoint = self.applymirrortoarray(startpoint)
+    if tuple(startpoint) not in self.__constraintatstartcache:
+      constraintatstart = constraint(startpoint)
+      self.__constraintatstartcache[tuple(startpoint)] = self.__constraintatstartcache[tuple(mirroredstartpoint)] = constraintatstart
+    else:
+      constraintatstart = self.__constraintatstartcache[tuple(startpoint)]
+
     if np.all(self.constraintmin <= constraintatstart) and np.all(constraintatstart <= self.constraintmax):
       fitprintmessage = "no need for a fit - average already satisfies the constraint"
       finalbincontents = startpoint
@@ -401,7 +407,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
               status=fitresult.status * -1,
             )
           if all(t.mirrortype for t in self.templates):
-            mirroredstartpoint = self.applymirrortoarray(startpoint)
             self.__fitresultscache[tuple(mirroredstartpoint)] = optimize.OptimizeResult(
               x=self.applymirrortoarray(fitresult.x),
               fun=fitresult.fun,
@@ -485,6 +490,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     if not hasscipy:
       raise ImportError("To use "+type(self).__name__+", please install a newer scipy.")
     self.__fitresultscache = {}
+    self.__constraintatstartcache = {}
 
   def makeNLL(self, x0, sigma, nbincontents, multiply):
     def negativeloglikelihood(x):
