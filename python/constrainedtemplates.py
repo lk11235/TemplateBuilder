@@ -218,7 +218,7 @@ class ConstrainedTemplatesBase(object):
 
 class OneTemplate(ConstrainedTemplatesBase):
   templatenames = "",
-  pureindices = 0, 2
+  pureindices = 0,
 
   def computefinalbincontents(self, bincontents, bincontentsabs):
     bincontent = bincontents[0].copy()
@@ -361,43 +361,53 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         print()
         raise
 
-      negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents, multiply=multiply)
+      if self.minimizemethod in ("trust-constr", "COBYLA"):
+        negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents, multiply=multiply)
+        minimizefunction = optimize.minimize
+        minimizeargs = negativeloglikelihood, fitstartpoint
+        minimizekwargs = {
+          "method": self.minimizemethod,
+          "options":  {},
+        }
 
-      if self.minimizemethod == "trust-constr":
-        nlljacobian = autograd.jacobian(negativeloglikelihood)
-        nllhessian = autograd.hessian(negativeloglikelihood)
+        if self.minimizemethod == "trust-constr":
+          nlljacobian = autograd.jacobian(negativeloglikelihood)
+          nllhessian = autograd.hessian(negativeloglikelihood)
 
-        bounds = self.bounds(fitstartpoint, multiply)
+          bounds = self.bounds(fitstartpoint, multiply)
 
-        constraintjacobian = autograd.jacobian(constraint)
-        constrainthessianv = autograd.linear_combination_of_hessians(constraint)
-        constraints = [optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)]
+          constraintjacobian = autograd.jacobian(constraint)
+          constrainthessianv = autograd.linear_combination_of_hessians(constraint)
+          constraints = [optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)]
 
-      elif self.minimizemethod == "COBYLA":
-        nlljacobian = nllhessian = bounds = None
-        constraints = [
-          {
-            "type": "ineq",
-            "fun": constraint,
+          minimizekwargs.update({
+            "jac": nlljacobian,
+            "hess": nllhessian,
+            "constraints": constraints,
+            "bounds": bounds,
           }
-        ]
-      else:
-        assert False, self.minimizemethod
+
+        elif self.minimizemethod == "COBYLA":
+          constraints = [
+            {
+              "type": "ineq",
+              "fun": constraint,
+            }
+          ]
+          minimizekwargs.update({
+            "constraints": constraints,
+          }
+        else:
+          assert False, self.minimizemethod
 
       try:
         if tuple(startpoint) not in self.__fitresultscache:
           #use startpoint as the key, not fitstartpoint,
           #because fitstartpoint has more numerical operations on it
           #and therefore leads to error
-          fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.minimize(
-            negativeloglikelihood,
-            fitstartpoint,
-            method=self.minimizemethod,
-            jac=nlljacobian,
-            hess=nllhessian,
-            constraints=constraints,
-            bounds=bounds,
-            options = {},
+          fitresult = self.__fitresultscache[tuple(startpoint)] = minimizefunction(
+            *minimizeargs,
+            **minimizekwargs
           )
           if fitresult.fun > negativeloglikelihood(fitstartpoint):
             fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.OptimizeResult(
