@@ -401,10 +401,18 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
           )
           if fitresult.fun > negativeloglikelihood(fitstartpoint):
             fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.OptimizeResult(
-              message=fitresult.message + "\nx = {0.x}, fun = {0.fun}, but the starting point was better, using that instead".format(fitresult),
+              message=fitresult.message + "\nx = {0.x}, fun = {0.fun}, but the starting point was better --> using that instead".format(fitresult),
               x=fitstartpoint,
               fun=negativeloglikelihood(fitstartpoint),
               status=fitresult.status * -1,
+            )
+          if getattr(fitresult, "maxcv", 0) > 0:
+            fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.OptimizeResult(
+              message=fitresult.message+"\nx={0.x}, fun={0.fun}, but maxcv={0.maxcv} --> using the starting point instead"),
+              x=fitstartpoint,
+              fun=negativeloglikelihood(fitstartpoint),
+              status=fitresult.status * -1,
+              maxcv=0,
             )
           if all(t.mirrortype for t in self.templates):
             self.__fitresultscache[tuple(mirroredstartpoint)] = optimize.OptimizeResult(
