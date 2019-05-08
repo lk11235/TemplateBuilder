@@ -106,8 +106,8 @@ def minimizequadratic(coeffs):
   if c == 0: return minimizelinear(coeffs[:-1])
   if c < 0:
     x = quadraticformula((a+max(2e6, -a+2e6), b, c))[0]
-    assert x.imag == 0, x
-    x = x.real
+    assert np.imag(x) == 0, x
+    x = np.real(x)
     fun = a + b*x + c*x**2
     assert fun < -1e6
     return optimize.OptimizeResult(
@@ -135,8 +135,8 @@ def minimizecubic(coeffs):
   """
   a, b, c, d = coeffs
   if d == 0: return minimizequadratic(coeffs[:-1])
-  x = [_ for _ in cubicformula((a+2e6, b, c, d)) if abs(_.imag) < 1e-12][0]
-  x = x.real
+  x = [_ for _ in cubicformula((a+2e6, b, c, d)) if abs(np.imag(_)) < 1e-12][0]
+  x = np.real(x)
   fun = a + b*x + c*x**2 + d*x**3
   assert fun < -1e6
   return optimize.OptimizeResult(
@@ -251,7 +251,7 @@ def findcriticalpointsquarticnd(n, coeffs, cmdline=hom4pswrapper.smallparalleltd
 
 def minimizequarticnd(n, coeffs, verbose=False, **kwargs):
   quartic = getquarticnd(n, coeffs)
-  criticalpoints = findcriticalpointsquarticnd(n, coeffs, verbose=verbose, **kwargs)
+  criticalpoints = list(findcriticalpointsquarticnd(n, coeffs, verbose=verbose, **kwargs))
   minimum = float("inf")
   minimumx = None
   for cp in criticalpoints:
@@ -260,7 +260,16 @@ def minimizequarticnd(n, coeffs, verbose=False, **kwargs):
     if value < minimum:
       minimum = value
       minimumx = cp
-  return minimum
+  return optimize.OptimizeResult(
+    x=np.array(minimumx),
+    success=True,
+    status=1,
+    message="gradient is zero at {} real points".format(len(criticalpoints)),
+    fun=minimum,
+  )
 
 if __name__ == "__main__":
-  print minimizequarticnd(4, np.array(range(70)) * np.array([(-1)**x for x in range(70)]), verbose=True)
+  a = [1, 1, -5, 0, 1]
+  print minimizequarticnd(1, a, verbose=True)
+  print
+  print minimizequartic(a)
