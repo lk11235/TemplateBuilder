@@ -187,10 +187,11 @@ def minimizequartic(coeffs):
     fun=np.real(result),
   )
 
-def getquartic4d(coeffs, mirrorw=False):
-  def quartic4d(x):
-    assert len(x) == 4
-    xand1 = np.array([1., (-1)**mirrorw*x[0], x[1], x[2], x[3]])
+def getquarticnd(n, coeffs, mirrorindices=()):
+  mirrorarray = np.array([-1 if i in mirrorindices else 1 for i in xrange(n)])
+  def quarticnd(x):
+    assert len(x) == n
+    xand1 = np.concatenate(([1.], mirrorarray*x))
     return sum(
       np.prod((coeff,) + xs)
       for coeff, xs in itertools.izip_longest(
@@ -198,16 +199,26 @@ def getquartic4d(coeffs, mirrorw=False):
         itertools.combinations_with_replacement(xand1, 4),
       )
     )
-  return quartic4d
+  quarticnd.__name__ = "quartic{}d".format(n)
+  return quarticnd
 
-def getquartic4dmonomials(coeffs, mirrorw=False):
-  xand1 = "1wxyz"
-  for coeff, xs in itertools.izip_longest(
+def getnvariableletters(n):
+  return "abcdefghijklmnopqrstuvwxyz"[-n:]
+
+def getquarticndmonomials(n, coeffs, mirrorindices=()):
+  xand1 = "1" + getnvariableletters(n)
+  assert len(xand1) == n+1
+  mirrorarray = np.concatenate(([1.], [-1 if i in mirrorindices else 1 for i in xrange(n)]))
+
+  for coeff, xsandmirrors in itertools.izip_longest(
     coeffs,
-    itertools.combinations_with_replacement(xand1, 4),
+    itertools.combinations_with_replacement(itertools.izip_longest(xand1, mirrorarray), 4),
   ):
+    if coeff is None or xsandmirrors is None:
+      raise RuntimeError("Provided {} coefficients, need {}".format(len(coeffs), len(list(itertools.combinations_with_replacement(xand1, 4)))))
+    xs, mirrors = itertools.izip(*xsandmirrors)
     ctr = collections.Counter(xs)
-    yield coeff * (-1)**(mirrorw * ctr["w"]), ctr
+    yield coeff * np.prod(mirrors), ctr
 
 def differentiatemonomial(coeffandxs, variable):
   coeff, xs = coeffandxs
@@ -216,19 +227,19 @@ def differentiatemonomial(coeffandxs, variable):
   if coeff: xs[variable] -= 1
   return coeff, xs
 
-def getquartic4dgradientstrings(coeffs):
-  monomials = tuple(getquartic4dmonomials(coeffs))
-  derivatives = [], [], [], []
-  variablesandderivatives = zip("wxyz", derivatives)
+def getquarticndgradientstrings(n, coeffs):
+  monomials = tuple(getquarticndmonomials(n, coeffs))
+  derivatives = [[] for _ in xrange(n)]
+  variablesandderivatives = zip(getnvariableletters(n), derivatives)
   for coeffandxs in monomials:
     for variable, derivative in variablesandderivatives:
       coeff, xs = differentiatemonomial(coeffandxs, variable)
       if coeff: derivative.append("*".join(itertools.chain((repr(coeff),), xs.elements())))
   return [" + ".join(_) + ";" for _ in derivatives]
 
-def findcriticalpointsquartic4d(coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False):
+def findcriticalpointsquarticnd(n, coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False):
   p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-  stdin = "\n".join(["{"] + getquartic4dgradientstrings(coeffs) + ["}"])
+  stdin = "\n".join(["{"] + getquarticndgradientstrings(n, coeffs) + ["}"])
   if verbose: print stdin
   out, err = p.communicate(stdin)
   if "error" in err:
@@ -238,15 +249,18 @@ def findcriticalpointsquartic4d(coeffs, cmdline=hom4pswrapper.smallparalleltdegc
     if "This solution appears to be real" in solution:
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
-def minimizequartic4d(coeffs, verbose=False, **kwargs):
-  quartic = getquartic4d(coeffs)
-  criticalpoints = findcriticalpointsquartic4d(coeffs, verbose=verbose, **kwargs)
+def minimizequarticnd(n, coeffs, verbose=False, **kwargs):
+  quartic = getquarticnd(n, coeffs)
+  criticalpoints = findcriticalpointsquarticnd(n, coeffs, verbose=verbose, **kwargs)
   minimum = float("inf")
+  minimumx = None
   for cp in criticalpoints:
     value = quartic(cp)
     if verbose: print cp, value
-    minimum = min(minimum, value)
+    if value < minimum:
+      minimum = value
+      minimumx = cp
   return minimum
 
 if __name__ == "__main__":
-  print minimizequartic([1, 3, -20, 0, 3])
+  print minimizequarticnd(4, np.array(range(70)) * np.array([(-1)**x for x in range(70)]), verbose=True)
