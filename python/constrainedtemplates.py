@@ -1,7 +1,8 @@
 from __future__ import print_function
 
-import abc, copy, itertools, textwrap
+import abc, copy, cStringIO, itertools, logging, textwrap
 
+import numpy as np
 from scipy import optimize
 from uncertainties import ufloat
 
@@ -272,8 +273,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         thisx0.append(thisonescontent[name].n)
         thissigma.append(thisonescontent[name].s)
 
-    x0 = [np.array(_) for _ in x0]
-    sigma = [np.array(_) for _ in sigma]
+    x0 = np.array(x0)
+    sigma = np.array(sigma)
 
     thingtoprint = ""
     fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
@@ -297,7 +298,10 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     mirroredx0 = self.applymirrortoarray(x0)
 
     try:
-      multiply = 10 ** -np.min(np.floor(np.log10(abs(x0[np.nonzero(x0)]))))
+      if np.any(np.nonzero(x0)):
+        multiply = 10 ** -np.min(np.floor(np.log10(abs(x0[np.nonzero(x0)]))))
+      else:
+        multiply = 1
     except:
       print("Error (probably a math error) involving x0:")
       print(x0)
@@ -306,13 +310,18 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
     mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
+    log_stream = cStringIO.StringIO()
     try:
       if cachekey not in self.__fitresultscache:
+        logger = logging.getLogger("cuttingplanemethod")
+        logger.addHandler(logging.StreamHandler(log_stream))
+        logger.setLevel(logging.INFO)
         fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
           x0*multiply,
           sigma*multiply,
           maxfractionaladjustment=1e-6,
         )
+        del logger.handlers[-1]
         if all(t.mirrortype for t in self.templates):
           self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
             x=self.applymirrortoarray(fitresult.x),
@@ -325,11 +334,12 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       fitresult = self.__fitresultscache[cachekey]
 
     except:
+      print(log_stream.getvalue())
       raise
 
     finalbincontents = fitresult.x / multiply
 
-    if nit == 1:
+    if fitresult.nit == 1:
       fitprintmessage = "global minimum already satisfies constraint"
     else:
       fitprintmessage = str(fitresult)
@@ -344,8 +354,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
-    if autograd is None:
-      raise ImportError("To use "+type(self).__name__+", please install autograd.")
     self.__fitresultscache = {}
 
   def makeNLL(self, x0, sigma, nbincontents, multiply):

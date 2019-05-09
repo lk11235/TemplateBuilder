@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import abc
+import abc, itertools, logging, sys
 
 import numpy as np
 import cvxpy as cp
@@ -8,28 +8,34 @@ from scipy import optimize
 
 from polynomialalgebra import minimizepolynomialnd, minimizequadratic, minimizequartic
 
+logger = logging.getLogger("cuttingplanemethod")
+
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, verbose=False, maxfractionaladjustment=0):
+  def __init__(self, x0, sigma, maxfractionaladjustment=0):
     if len(x0) != self.xsize:
       raise ValueError("len(x0) should be {}, is actually {}".format(self.xsize, len(x0)))
     if len(sigma) != self.xsize:
       raise ValueError("len(sigma) should be {}, is actually {}".format(self.xsize, len(sigma)))
+    if x0.shape != sigma.shape:
+      raise ValueError("x0 and sigma have different shapes: {}, {}".format(x0.shape, sigma.shape))
 
-    self.__x0 = x0
-    self.__sigma = sigma
-    self.__verbose = verbose
     self.__constraints = []
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
     x = self.__x = cp.Variable(self.xsize)
 
-    shiftandscale = (self.__x - self.__x0) / self.__sigma
-    self.__loglikelihood = cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
-    self.__minimize = cp.Minimize(self.__loglikelihood)
+    self.__loglikelihood = 0
 
-  @property
-  def verbose(self): return self.__verbose
+    if len(x0.shape) == 1:
+      x0 = np.array([x0])
+      sigma = np.array([sigma])
+
+    for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
+      shiftandscale = (self.__x - x0column) / sigmacolumn
+      self.__loglikelihood += cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
+
+    self.__minimize = cp.Minimize(self.__loglikelihood)
 
   @abc.abstractproperty
   def xsize(self): "can just be a class member"
@@ -48,11 +54,10 @@ class CuttingPlaneMethodBase(object):
     if self.__results is not None:
       raise RuntimeError("Can't iterate, already finished")
 
-    if self.verbose:
-      toprint = "starting iteration {}".format(len(self.__constraints)+1)
-      print "="*len(toprint)
-      print toprint
-      print "="*len(toprint)
+    toprint = "starting iteration {}".format(len(self.__constraints)+1)
+    logger.info("="*len(toprint))
+    logger.info(toprint)
+    logger.info("="*len(toprint))
 
     prob = cp.Problem(
       self.__minimize,
@@ -62,8 +67,7 @@ class CuttingPlaneMethodBase(object):
 
     x = self.__x.value
 
-    if self.verbose:
-      print "found minimum", prob.value, "at", x
+    logger.info("found minimum {} at {}".format(prob.value, x))
 
     #does it satisfy the constraints?
 
@@ -71,8 +75,7 @@ class CuttingPlaneMethodBase(object):
     minvalue = minimizepolynomial.fun
 
     if minvalue >= 0:
-      if self.verbose:
-        print "Minimum of the constraint polynomial is", minvalue, " --> finished successfully!"
+      logger.info("Minimum of the constraint polynomial is %g --> finished successfully!", minvalue)
       self.__results = optimize.OptimizeResult(
         x=x,
         success=True,
@@ -83,16 +86,14 @@ class CuttingPlaneMethodBase(object):
         fun=prob.value
       )
     elif -minvalue < x[0] * self.__maxfractionaladjustment:
-      if self.verbose:
-        print "Minimum of the constraint polynomial is", minvalue
+      logger.info("Minimum of the constraint polynomial is %g", minvalue)
       oldx0 = x[0]
       while minvalue < 0:
         print x[0], minvalue
         x[0] -= minvalue - np.finfo(float).eps
         minvalue = self.evalconstraint(x).fun
-      if self.verbose:
-        print "Multiply constant term by (1+{}) --> new minimum of the constraint polynomial is {}".format(x[0] / oldx0 - 1, minvalue)
-        print "Approximate minimum of the target function is", self.__loglikelihood.value, "at", x
+      logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[0] / oldx0 - 1, minvalue)
+      logger.info("Approximate minimum of the target function is {} at {}".format(self.__loglikelihood.value, x))
       self.__results = optimize.OptimizeResult(
         x=x,
         success=True,
@@ -103,8 +104,7 @@ class CuttingPlaneMethodBase(object):
         fun=self.__loglikelihood.value
       )
     else:
-      if self.verbose:
-        print "Minimum of the constraint polynomial is", minvalue, " --> adding a new constraint using this minimum"
+      logger.info("Minimum of the constraint polynomial is %g --> adding a new constraint using this minimum", minvalue)
       self.__constraints.append(cp.matmul(minimizepolynomial.linearconstraint, self.__x) >= np.finfo(float).eps)
 
   def run(self, *args, **kwargs):
@@ -129,21 +129,22 @@ class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodBase):
   def evalconstraint(self, coeffs):
     return minimizepolynomialnd(4, 4, coeffs)
 
-def cuttingplanesmethod1dquadratic(*args, **kwargs):
+def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
-def cuttingplanesmethod1dquartic(*args, **kwargs):
+def cuttingplanemethod1dquartic(*args, **kwargs):
   return CuttingPlaneMethod1DQuartic(*args, **kwargs).run()
-def cuttingplanesmethod4dquadratic(*args, **kwargs):
+def cuttingplanemethod4dquadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuadratic(*args, **kwargs).run()
-def cuttingplanesmethod4dquartic(*args, **kwargs):
+def cuttingplanemethod4dquartic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
 
 if __name__ == "__main__":
+  logger.setLevel(logging.INFO)
+  logger.addHandler(logging.StreamHandler(sys.stdout))
   a = np.array([1]*70)
   a[2] = -1
   print CuttingPlaneMethod4DQuartic(
     a,
     a,
-    verbose=True,
-    maxfractionaladjustment=1e-7,
+    maxfractionaladjustment=1e-6,
   ).run()
