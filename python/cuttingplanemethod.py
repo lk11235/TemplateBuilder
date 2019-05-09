@@ -10,7 +10,7 @@ from polynomialalgebra import minimizepolynomialnd, minimizequadratic, minimizeq
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, verbose=False):
+  def __init__(self, x0, sigma, verbose=False, maxfractionaladjustment=0):
     if len(x0) != self.xsize:
       raise ValueError("len(x0) should be {}, is actually {}".format(self.xsize, len(x0)))
     if len(sigma) != self.xsize:
@@ -21,14 +21,12 @@ class CuttingPlaneMethodBase(object):
     self.__verbose = verbose
     self.__constraints = []
     self.__results = None
+    self.__maxfractionaladjustment = maxfractionaladjustment
     x = self.__x = cp.Variable(self.xsize)
 
     shiftandscale = (self.__x - self.__x0) / self.__sigma
-    print shiftandscale.curvature
-#    loglikelihood = cp.matmul(shiftandscale, shiftandscale)
-    loglikelihood = cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
-    print loglikelihood.curvature
-    self.__minimize = cp.Minimize(loglikelihood)
+    self.__loglikelihood = cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
+    self.__minimize = cp.Minimize(self.__loglikelihood)
 
   @property
   def verbose(self): return self.__verbose
@@ -62,25 +60,47 @@ class CuttingPlaneMethodBase(object):
     )
     prob.solve()
 
+    x = self.__x.value
+
     if self.verbose:
-      print "found minimum", prob.value, "at", self.__x.value
+      print "found minimum", prob.value, "at", x
 
     #does it satisfy the constraints?
 
-    minimizepolynomial = self.evalconstraint(self.__x.value)
+    minimizepolynomial = self.evalconstraint(x)
     minvalue = minimizepolynomial.fun
 
     if minvalue >= 0:
       if self.verbose:
         print "Minimum of the constraint polynomial is", minvalue, " --> finished successfully!"
       self.__results = optimize.OptimizeResult(
-        x=self.__x.value,
+        x=x,
         success=True,
         status=1,
         nit=len(self.__constraints)+1,
         maxcv=0,
         message="finished successfully",
         fun=prob.value
+      )
+    elif -minvalue < x[0] * self.__maxfractionaladjustment:
+      if self.verbose:
+        print "Minimum of the constraint polynomial is", minvalue
+      oldx0 = x[0]
+      while minvalue < 0:
+        print x[0], minvalue
+        x[0] -= minvalue - np.finfo(float).eps
+        minvalue = self.evalconstraint(x).fun
+      if self.verbose:
+        print "Multiply constant term by (1+{}) --> new minimum of the constraint polynomial is {}".format(x[0] / oldx0 - 1, minvalue)
+        print "Approximate minimum of the target function is", self.__loglikelihood.value, "at", x
+      self.__results = optimize.OptimizeResult(
+        x=x,
+        success=True,
+        status=2,
+        nit=len(self.__constraints)+1,
+        maxcv=0,
+        message="multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
+        fun=self.__loglikelihood.value
       )
     else:
       if self.verbose:
@@ -115,5 +135,6 @@ if __name__ == "__main__":
   print CuttingPlaneMethod4DQuartic(
     a,
     a,
-    verbose=True
+    verbose=True,
+    maxfractionaladjustment=1e-7,
   ).run()
