@@ -79,6 +79,7 @@ def minimizeconstant(coeffs):
     status=2,
     message="function is constant",
     fun=a,
+    linearconstraint=np.array([1]),
   )
 
 def minimizelinear(coeffs):
@@ -86,7 +87,11 @@ def minimizelinear(coeffs):
   minimize y=a+bx
   """
   a, b = coeffs
-  if not b: return minimizeconstant(coeffs[:-1])
+  if not b:
+    result = minimizeconstant(coeffs[:-1])
+    x = result.x[0]
+    result.linearconstraint = np.array([1, x])
+    return result
   x = linearformula((a+2e6, b))[0]
   fun = a + b*x
   assert fun < -1e6
@@ -95,7 +100,8 @@ def minimizelinear(coeffs):
     success=False,
     status=3,
     message="function is linear, no minimum",
-    fun=fun
+    fun=fun,
+    linearconstraint=np.array([1, x]),
   )
 
 def minimizequadratic(coeffs):
@@ -103,7 +109,11 @@ def minimizequadratic(coeffs):
   minimize y=a+bx+c
   """
   a, b, c = coeffs
-  if c == 0: return minimizelinear(coeffs[:-1])
+  if c == 0:
+    result = minimizelinear(coeffs[:-1])
+    x = result.x[0]
+    result.linearconstraint = np.array([1, x, x**2])
+    return result
   if c < 0:
     x = quadraticformula((a+max(2e6, -a+2e6), b, c))[0]
     assert np.imag(x) == 0, x
@@ -115,7 +125,8 @@ def minimizequadratic(coeffs):
       success=False,
       status=3,
       message="function is negative quadratic, no minimum",
-      fun=fun
+      fun=fun,
+      linearconstraint=np.array([1, x, x**2]),
     )
 
   x = linearformula([b, 2*c])
@@ -127,6 +138,7 @@ def minimizequadratic(coeffs):
     status=1,
     message="function is quadratic",
     fun=fun,
+    linearconstraint=np.array([1, x, x**2]),
   )
 
 def minimizecubic(coeffs):
@@ -134,7 +146,11 @@ def minimizecubic(coeffs):
   minimize y=a+bx+cx^2+dx^3
   """
   a, b, c, d = coeffs
-  if d == 0: return minimizequadratic(coeffs[:-1])
+  if d == 0:
+    result = minimizequadratic(coeffs[:-1])
+    x = result.x[0]
+    result.linearconstraint = np.array([1, x, x**2, x**3])
+    return result
   x = [_ for _ in cubicformula((a+2e6, b, c, d)) if abs(np.imag(_)) < 1e-12][0]
   x = np.real(x)
   fun = a + b*x + c*x**2 + d*x**3
@@ -144,7 +160,8 @@ def minimizecubic(coeffs):
     success=False,
     status=3,
     message="function is cubic, no minimum",
-    fun=fun
+    fun=fun,
+    linearconstraint=np.array([1, x, x**2, x**3])
   )
 
 def minimizequartic(coeffs):
@@ -152,7 +169,11 @@ def minimizequartic(coeffs):
   minimize y=a+bx+cx^2+dx^3+ex^4
   """
   a, b, c, d, e = coeffs
-  if e == 0: return minimizecubic(coeffs[:-1])
+  if e == 0:
+    result = minimizecubic(coeffs[:-1])
+    x = result.x[0]
+    result.linearconstraint = np.array([1, x, x**2, x**3, x**4])
+    return result
   if e < 0:
     x = 1
     fun = 0
@@ -165,54 +186,58 @@ def minimizequartic(coeffs):
       status=3,
       message="function is negative quartic, no minimum",
       fun=fun,
+      linearconstraint = np.array([1, x, x**2, x**3, x**4]),
     )
 
   flatpoints = cubicformula(np.array([b, 2*c, 3*d, 4*e]))
-  result = float("inf")
-  xresult = None
-  for x in flatpoints:
-    if abs(np.imag(x)) > 1e-12: continue
-    x = np.real(x)
-    newresult = a + b*x + c*x**2 + d*x**3 + e*x**4
-    if newresult < result:
-      result = newresult
-      xresult = x
-  if np.isnan(result) or xresult is None: assert False, (coeffs, xresult, result)
+  minimum = float("inf")
+  x = None
+  for flatpoint in flatpoints:
+    if abs(np.imag(flatpoint)) > 1e-12: continue
+    flatpoint = np.real(flatpoint)
+    newminimum = a + b*flatpoint + c*flatpoint**2 + d*flatpoint**3 + e*flatpoint**4
+    if newminimum < minimum:
+      minimum = newminimum
+      x = flatpoint
+  if np.isnan(minimum) or x is None: assert False, (coeffs, x, minimum)
 
   return optimize.OptimizeResult(
-    x=np.array([xresult]),
+    x=np.array([x]),
     success=True,
     status=1,
     message="function is quartic",
-    fun=np.real(result),
+    fun=np.real(minimum),
+    linearconstraint = np.array([1, x, x**2, x**3, x**4]),
   )
 
-def getquarticnd(n, coeffs, mirrorindices=()):
+
+
+def getpolynomialnd(d, n, coeffs, mirrorindices=()):
   mirrorarray = np.array([-1 if i in mirrorindices else 1 for i in xrange(n)])
-  def quarticnd(x):
+  def polynomialnd(x):
     assert len(x) == n
     xand1 = np.concatenate(([1.], mirrorarray*x))
     return sum(
       np.prod((coeff,) + xs)
       for coeff, xs in itertools.izip_longest(
         coeffs,
-        itertools.combinations_with_replacement(xand1, 4),
+        itertools.combinations_with_replacement(xand1, d),
       )
     )
-  quarticnd.__name__ = "quartic{}d".format(n)
-  return quarticnd
+  polynomialnd.__name__ = "polynomial{}degree{}d".format(d, n)
+  return polynomialnd
 
 def getnvariableletters(n):
   return "abcdefghijklmnopqrstuvwxyz"[-n:]
 
-def getquarticndmonomials(n, coeffs, mirrorindices=()):
+def getpolynomialndmonomials(d, n, coeffs, mirrorindices=()):
   xand1 = "1" + getnvariableletters(n)
   assert len(xand1) == n+1
   mirrorarray = np.concatenate(([1.], [-1 if i in mirrorindices else 1 for i in xrange(n)]))
 
   for coeff, xsandmirrors in itertools.izip_longest(
     coeffs,
-    itertools.combinations_with_replacement(itertools.izip_longest(xand1, mirrorarray), 4),
+    itertools.combinations_with_replacement(itertools.izip_longest(xand1, mirrorarray), d),
   ):
     if coeff is None or xsandmirrors is None:
       raise RuntimeError("Provided {} coefficients, need {}".format(len(coeffs), len(list(itertools.combinations_with_replacement(xand1, 4)))))
@@ -227,8 +252,8 @@ def differentiatemonomial(coeffandxs, variable):
   if coeff: xs[variable] -= 1
   return coeff, xs
 
-def getquarticndgradientstrings(n, coeffs):
-  monomials = tuple(getquarticndmonomials(n, coeffs))
+def getpolynomialndgradientstrings(d, n, coeffs):
+  monomials = tuple(getpolynomialndmonomials(d, n, coeffs))
   derivatives = [[] for _ in xrange(n)]
   variablesandderivatives = zip(getnvariableletters(n), derivatives)
   for coeffandxs in monomials:
@@ -237,9 +262,9 @@ def getquarticndgradientstrings(n, coeffs):
       if coeff: derivative.append("*".join(itertools.chain((repr(coeff),), xs.elements())))
   return [" + ".join(_) + ";" for _ in derivatives]
 
-def findcriticalpointsquarticnd(n, coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False):
+def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False):
   p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-  stdin = "\n".join(["{"] + getquarticndgradientstrings(n, coeffs) + ["}"])
+  stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
   if verbose: print stdin
   out, err = p.communicate(stdin)
   if "error" in err:
@@ -249,13 +274,13 @@ def findcriticalpointsquarticnd(n, coeffs, cmdline=hom4pswrapper.smallparalleltd
     if "This solution appears to be real" in solution:
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
-def minimizequarticnd(n, coeffs, verbose=False, **kwargs):
-  quartic = getquarticnd(n, coeffs)
-  criticalpoints = list(findcriticalpointsquarticnd(n, coeffs, verbose=verbose, **kwargs))
+def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
+  polynomial = getpolynomialnd(d, n, coeffs)
+  criticalpoints = list(findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, **kwargs))
   minimum = float("inf")
   minimumx = None
   for cp in criticalpoints:
-    value = quartic(cp)
+    value = polynomial(cp)
     if verbose: print cp, value
     if value < minimum:
       minimum = value
@@ -266,10 +291,11 @@ def minimizequarticnd(n, coeffs, verbose=False, **kwargs):
     status=1,
     message="gradient is zero at {} real points".format(len(criticalpoints)),
     fun=minimum,
+    linearconstraint=getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
   )
 
 if __name__ == "__main__":
   a = [1, 1, -5, 0, 1]
-  print minimizequarticnd(1, a, verbose=True)
+  print minimizepolynomialnd(4, 1, a, verbose=True)
   print
   print minimizequartic(a)
