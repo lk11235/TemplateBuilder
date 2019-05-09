@@ -2,23 +2,11 @@ from __future__ import print_function
 
 import abc, copy, itertools, textwrap
 
-try:
-  import autograd
-except ImportError:
-  autograd = None
-  import numpy as np
-else:
-  import autograd.numpy as np
-
 from scipy import optimize
-if hasattr(optimize, "NonlinearConstraint"):
-  hasscipy = True
-else:
-  hasscipy = False
-
 from uncertainties import ufloat
 
-from moremath import kspoissongaussian, minimizequartic, minimizequartic4d, weightedaverage
+from moremath import kspoissongaussian, weightedaverage
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic
 
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
@@ -274,16 +262,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     sigma = [[] for t in self.templates]
 
     for bincontent, bincontentabs, t in itertools.izip(bincontents, bincontentsabs, self.templates):
-      for name in list(bincontent):
-        if (
-          bincontent[name].n == 0    #0 content - maginfy error to the maximum error
-          or (                            #large relative error and this is the only nonzero one - same
-            bincontent[name].s == abs(bincontent[name].n)
-            and all(othercontent.n == 0 for othername, othercontent in bincontent.iteritems() if othername != name)
-          )
-        ):
-          bincontent[name] = ufloat(bincontent[name].n, max(othercontent.s for othercontent in bincontent.itervalues()))
-
       outliers = self.findoutliers(bincontent, bincontentabs)
       bincontent.update(outliers)
       if outliers:
@@ -296,16 +274,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     x0 = [np.array(_) for _ in x0]
     sigma = [np.array(_) for _ in sigma]
-
-    startpoint = np.array([weightedaverage(_.itervalues()).n for _ in bincontents])
-    for i in self.pureindices:
-      if startpoint[i] == 0:
-        if all(startpoint[i] <= np.finfo(float).eps for i in self.pureindices):
-          startpoint[i] = np.finfo(float).eps
-        else:
-          startpoint[i] = min(startpoint[i] for i in self.pureindices if startpoint[i] > np.finfo(float).eps)
-
-    constraint = self.constraint
 
     thingtoprint = ""
     fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
@@ -326,123 +294,47 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
         thingtoprint += "\n"+fmt.format(*fmtargs)
 
-    mirroredstartpoint = self.applymirrortoarray(startpoint)
-    if tuple(startpoint) not in self.__constraintatstartcache:
-      constraintatstart = constraint(startpoint)
-      self.__constraintatstartcache[tuple(startpoint)] = self.__constraintatstartcache[tuple(mirroredstartpoint)] = constraintatstart
-    else:
-      constraintatstart = self.__constraintatstartcache[tuple(startpoint)]
+    mirroredx0 = self.applymirrortoarray(x0)
 
-    if np.all(self.constraintmin <= constraintatstart) and np.all(constraintatstart <= self.constraintmax):
-      fitprintmessage = "no need for a fit - average already satisfies the constraint"
-      finalbincontents = startpoint
-    else:
-      fitprintmessage = textwrap.dedent("""
-        multiply by {:.0e} for numerical stability
-        weighted averages:
-        {}
-        adjust to constraint --> fit starting from:
-        {} (NLL = {})
+    try:
+      multiply = 10 ** -np.min(np.floor(np.log10(abs(x0[np.nonzero(x0)]))))
+    except:
+      print("Error (probably a math error) involving x0:")
+      print(x0)
+      print()
+      raise
 
-        bounds:
-        {}
-
-        result:
-        {}
-      """)
-
-      try:
-        multiply = 10 ** -min(np.floor(np.log10(abs(startpoint[np.nonzero(startpoint)]))))
-        startpoint *= multiply
-        fitstartpoint = self.adjuststartpoint(startpoint, constraint, self.constraintmin, self.constraintmax)
-      except:
-        print("Error (probably a math error) involving startpoint:")
-        print(startpoint)
-        print()
-        raise
-
-      if self.minimizemethod in ("trust-constr", "COBYLA"):
-        negativeloglikelihood = self.makeNLL(x0, sigma, nbincontents, multiply=multiply)
-        minimizefunction = optimize.minimize
-        minimizeargs = negativeloglikelihood, fitstartpoint
-        minimizekwargs = {
-          "method": self.minimizemethod,
-          "options":  {},
-        }
-
-        if self.minimizemethod == "trust-constr":
-          nlljacobian = autograd.jacobian(negativeloglikelihood)
-          nllhessian = autograd.hessian(negativeloglikelihood)
-
-          bounds = self.bounds(fitstartpoint, multiply)
-
-          constraintjacobian = autograd.jacobian(constraint)
-          constrainthessianv = autograd.linear_combination_of_hessians(constraint)
-          constraints = [optimize.NonlinearConstraint(constraint, self.constraintmin, self.constraintmax, constraintjacobian, constrainthessianv)]
-
-          minimizekwargs.update({
-            "jac": nlljacobian,
-            "hess": nllhessian,
-            "constraints": constraints,
-            "bounds": bounds,
-          }
-
-        elif self.minimizemethod == "COBYLA":
-          constraints = [
-            {
-              "type": "ineq",
-              "fun": constraint,
-            }
-          ]
-          minimizekwargs.update({
-            "constraints": constraints,
-          }
-        else:
-          assert False, self.minimizemethod
-
-      try:
-        if tuple(startpoint) not in self.__fitresultscache:
-          #use startpoint as the key, not fitstartpoint,
-          #because fitstartpoint has more numerical operations on it
-          #and therefore leads to error
-          fitresult = self.__fitresultscache[tuple(startpoint)] = minimizefunction(
-            *minimizeargs,
-            **minimizekwargs
+    cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
+    mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
+    try:
+      if cachekey not in self.__fitresultscache:
+        fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
+          x0*multiply,
+          sigma*multiply,
+          maxfractionaladjustment=1e-6,
+        )
+        if all(t.mirrortype for t in self.templates):
+          self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
+            x=self.applymirrortoarray(fitresult.x),
+            fun=fitresult.fun,
+            message="(mirrored) "+fitresult.message,
+            status=fitresult.status,
+            nit=fitresult.nit,
+            maxcv=fitresult.maxcv
           )
-          if fitresult.fun > negativeloglikelihood(fitstartpoint):
-            fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.OptimizeResult(
-              message=fitresult.message + "\nx = {0.x}, fun = {0.fun}, but the starting point was better --> using that instead".format(fitresult),
-              x=fitstartpoint,
-              fun=negativeloglikelihood(fitstartpoint),
-              status=fitresult.status * -1,
-            )
-          if getattr(fitresult, "maxcv", 0) > 0:
-            fitresult = self.__fitresultscache[tuple(startpoint)] = optimize.OptimizeResult(
-              message=fitresult.message+"\nx={0.x}, fun={0.fun}, but maxcv={0.maxcv} --> using the starting point instead"),
-              x=fitstartpoint,
-              fun=negativeloglikelihood(fitstartpoint),
-              status=fitresult.status * -1,
-              maxcv=0,
-            )
-          if all(t.mirrortype for t in self.templates):
-            self.__fitresultscache[tuple(mirroredstartpoint)] = optimize.OptimizeResult(
-              x=self.applymirrortoarray(fitresult.x),
-              fun=fitresult.fun,
-              message="(mirrored) "+fitresult.message,
-              status=fitresult.status,
-            )
-        fitresult = self.__fitresultscache[tuple(startpoint)]
+      fitresult = self.__fitresultscache[cachekey]
 
-      except:
-        print(thingtoprint+"\n\n"+fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, ""))
-        raise
+    except:
+      raise
 
-      fitprintmessage = fitprintmessage.format(multiply, startpoint, fitstartpoint, negativeloglikelihood(fitstartpoint), bounds, fitresult).strip()
+    finalbincontents = fitresult.x / multiply
 
-      finalbincontents = fitresult.x / multiply
-
-      warning.append("fit converged with NLL = {}".format(fitresult.fun))
-      if fitresult.status not in (1, 2): warning.append(fitresult.message)
+    if nit == 1:
+      fitprintmessage = "global minimum already satisfies constraint"
+    else:
+      fitprintmessage = str(fitresult)
+      warning.append("fit converged in {0.nit} with NLL = {0.fun}".format(fitresult))
+      warning.append(fitresult.message)
 
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
@@ -450,65 +342,11 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     return finalbincontents, thingtoprint.lstrip("\n"), warning
 
-  def bounds(self, fitstartpoint, multiply):
-    """
-    most lenient possible bounds
-    override this to get better results!
-    """
-    return optimize.Bounds(
-      np.array([np.finfo(float).eps if i in self.pureindices else -np.inf for i in xrange(self.ntemplates)]) * multiply,
-      np.array([np.inf for i in xrange(self.ntemplates)]) * multiply,
-      keep_feasible=True,
-    )
-
-  def adjuststartpoint(self, startpoint, constraint, constraintmin, constraintmax):
-    result = np.copy(startpoint)
-
-    for constraintidx in xrange(len(constraint(startpoint))):
-      startpoint = result
-
-      if (constraintmin < constraint(startpoint))[constraintidx]: continue
-
-      #we want to adjust the start point in a reasonable way so that it fills the constraint
-      #the simple way to do this is to increase the pure components by some factor
-      increasepureindices = np.array([1 if i in self.pureindices else 0 for i, _ in enumerate(startpoint)])
-      def functiontosolvefor0(x):
-        print(x, constraint(startpoint * (increasepureindices*x + 1))[constraintidx] - constraintmin)
-        return constraint(startpoint * (increasepureindices*x + 1))[constraintidx] - constraintmin
-      assert functiontosolvefor0(0) < 0
-
-      for x in itertools.count(0):
-        if functiontosolvefor0(x) > 0:
-          break
-
-      fprime = fprime2 = None
-      if self.candifferentiateconstraint:
-        fprime = autograd.grad(functiontosolvefor0)
-        fprime2 = autograd.grad(fprime)
-      increaseby = optimize.brentq(functiontosolvefor0, x-1, x)
-
-      for i in xrange(10000):
-        result = startpoint * (increasepureindices*increaseby + 1)
-        if (constraintmin < constraint(result))[constraintidx]:
-          break
-        increaseby *= 1.0000001
-        if i > 5000: print(i, increaseby, result, constraint(result))
-      else:
-        raise RuntimeError("increasing didn't work")
-
-    assert np.all(constraintmin < constraint(result)), constraint(result)
-    assert np.all(constraint(result) < constraintmax), constraint(result)
-
-    return result
-
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
     if autograd is None:
       raise ImportError("To use "+type(self).__name__+", please install autograd.")
-    if not hasscipy:
-      raise ImportError("To use "+type(self).__name__+", please install a newer scipy.")
     self.__fitresultscache = {}
-    self.__constraintatstartcache = {}
 
   def makeNLL(self, x0, sigma, nbincontents, multiply):
     def negativeloglikelihood(x):
@@ -520,54 +358,19 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     return negativeloglikelihood
 
   @abc.abstractproperty
-  def minimizemethod(self): "can be a class member"
-  @abc.abstractproperty
-  def candifferentiateconstraint(self): "can be a class member"
-  @abc.abstractmethod
-  def constraint(self, x): "can be static"
-  @abc.abstractproperty
-  def constraintmin(self): "can be a class member"
-  @abc.abstractproperty
-  def constraintmax(self): "can be a class member"
-
-  @abc.abstractproperty
   def pureindices(self): "can be a class member"
+  @abc.abstractmethod
+  def cuttingplanefunction(self): "can be static"
 
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
-  minimizemethod = "trust-constr"
-  candifferentiateconstraint = True
-
-  @staticmethod
-  def constraint(x):
-    #|interference| <= 2*sqrt(SM*BSM)
-    #2*sqrt(SM*BSM) - |interference| >= 0
-    return np.array([2*(x[0]*x[2])**.5 - abs(x[1])])
-
-  constraintmin = np.finfo(np.float).eps
-  constraintmax = np.inf
+  cuttingplanefunction = staticmethod(cuttingplanemethod1dquadratic)
 
 class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
   pureindices = 0, 4
-  minimizemethod = "trust-constr"
-  candifferentiateconstraint = True
-
-  @staticmethod
-  def constraint(x):
-    return np.array([minimizequartic(x)])
-
-  constraintmin = np.finfo(np.float).eps
-  constraintmax = np.inf
-
-  def bounds(self, fitstartpoint, multiply):
-    maxevenstartpoint = max(_ for i, _ in enumerate(fitstartpoint) if i in (0, 2, 4))
-    return optimize.Bounds(
-      np.array([np.finfo(float).eps, -10*maxevenstartpoint, -10*maxevenstartpoint, -10*maxevenstartpoint, np.finfo(float).eps]) * multiply,
-      np.array([2*fitstartpoint[0],   10*maxevenstartpoint,  10*maxevenstartpoint,  10*maxevenstartpoint, 2*fitstartpoint[4] ]) * multiply,
-      keep_feasible=True,
-    )
+  cuttingplanefunction = staticmethod(cuttingplanemethod1dquartic)
 
 class FourParameterggH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -578,26 +381,7 @@ class FourParameterggH(ConstrainedTemplatesWithFit):
     "l",
   )
   pureindices = 0, 5, 9, 12, 14
-  minimizemethod = "trust-constr"
-  candifferentiateconstraint = True
-
-  @staticmethod
-  def constraint(x):
-    return np.array([
-      2*(x[0 ]*x[5 ])**.5 - abs(x[1 ]),
-      2*(x[0 ]*x[9 ])**.5 - abs(x[2 ]),
-      2*(x[0 ]*x[12])**.5 - abs(x[3 ]),
-      2*(x[0 ]*x[14])**.5 - abs(x[4 ]),
-      2*(x[5 ]*x[9 ])**.5 - abs(x[6 ]),
-      2*(x[5 ]*x[12])**.5 - abs(x[7 ]),
-      2*(x[5 ]*x[14])**.5 - abs(x[8 ]),
-      2*(x[9 ]*x[12])**.5 - abs(x[10]),
-      2*(x[9 ]*x[14])**.5 - abs(x[11]),
-      2*(x[12]*x[14])**.5 - abs(x[13]),
-    ])
-
-  constraintmin = np.finfo(np.float).eps
-  constraintmax = np.inf
+  cuttingplanefunction = staticmethod(cuttingplanemethod4dquadratic)
 
 class FourParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -655,12 +439,4 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
 
   )
   pureindices = 0, 35, 55, 65, 69
-  minimizemethod = "COBYLA"
-  candifferentiateconstraint = False
-
-  @staticmethod
-  def constraint(x):
-    return np.array([minimizequartic4d(x)])
-
-  constraintmin = np.finfo(np.float).eps
-  constraintmax = np.inf
+  cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic)

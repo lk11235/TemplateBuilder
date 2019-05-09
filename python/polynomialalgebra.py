@@ -19,8 +19,7 @@ import functools
 import itertools
 import subprocess
 
-import autograd
-import autograd.numpy as np
+import numpy as np
 import scipy.optimize as optimize
 
 import hom4pswrapper

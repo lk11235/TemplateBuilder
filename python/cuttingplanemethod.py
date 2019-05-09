@@ -129,6 +129,15 @@ class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodBase):
   def evalconstraint(self, coeffs):
     return minimizepolynomialnd(4, 4, coeffs)
 
+def cuttingplanesmethod1dquadratic(*args, **kwargs):
+  return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
+def cuttingplanesmethod1dquartic(*args, **kwargs):
+  return CuttingPlaneMethod1DQuartic(*args, **kwargs).run()
+def cuttingplanesmethod4dquadratic(*args, **kwargs):
+  return CuttingPlaneMethod4DQuadratic(*args, **kwargs).run()
+def cuttingplanesmethod4dquartic(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
+
 if __name__ == "__main__":
   a = np.array([1]*70)
   a[2] = -1
