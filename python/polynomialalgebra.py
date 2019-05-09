@@ -90,7 +90,7 @@ def minimizelinear(coeffs):
   if not b:
     result = minimizeconstant(coeffs[:-1])
     x = result.x[0]
-    result.linearconstraint = np.array([1, x])
+    result.linearconstraint = np.array([0, x])
     return result
   x = linearformula((a+2e6, b))[0]
   fun = a + b*x
@@ -101,7 +101,7 @@ def minimizelinear(coeffs):
     status=3,
     message="function is linear, no minimum",
     fun=fun,
-    linearconstraint=np.array([1, x]),
+    linearconstraint=np.array([0, x]),
   )
 
 def minimizequadratic(coeffs):
@@ -112,7 +112,7 @@ def minimizequadratic(coeffs):
   if c == 0:
     result = minimizelinear(coeffs[:-1])
     x = result.x[0]
-    result.linearconstraint = np.array([1, x, x**2])
+    result.linearconstraint = np.array([0, 0, 1])
     return result
   if c < 0:
     x = quadraticformula((a+max(2e6, -a+2e6), b, c))[0]
@@ -126,7 +126,7 @@ def minimizequadratic(coeffs):
       status=3,
       message="function is negative quadratic, no minimum",
       fun=fun,
-      linearconstraint=np.array([1, x, x**2]),
+      linearconstraint=np.array([0, 0, 1]),
     )
 
   x = linearformula([b, 2*c])
@@ -149,7 +149,7 @@ def minimizecubic(coeffs):
   if d == 0:
     result = minimizequadratic(coeffs[:-1])
     x = result.x[0]
-    result.linearconstraint = np.array([1, x, x**2, x**3])
+    result.linearconstraint = np.concatenate(result.linearconstraint, [0])
     return result
   x = [_ for _ in cubicformula((a+2e6, b, c, d)) if abs(np.imag(_)) < 1e-12][0]
   x = np.real(x)
@@ -161,7 +161,7 @@ def minimizecubic(coeffs):
     status=3,
     message="function is cubic, no minimum",
     fun=fun,
-    linearconstraint=np.array([1, x, x**2, x**3])
+    linearconstraint=np.array([0, 0, 0, x**3])
   )
 
 def minimizequartic(coeffs):
@@ -172,7 +172,10 @@ def minimizequartic(coeffs):
   if e == 0:
     result = minimizecubic(coeffs[:-1])
     x = result.x[0]
-    result.linearconstraint = np.array([1, x, x**2, x**3, x**4])
+    if result.linearconstraint[-1]:
+      result.linearconstraint = np.array([0, 0, 0, 0, 1])
+    else:
+      result.linearconstraint = np.concatenate(result.linearconstraint, [0])
     return result
   if e < 0:
     x = 1
@@ -186,7 +189,7 @@ def minimizequartic(coeffs):
       status=3,
       message="function is negative quartic, no minimum",
       fun=fun,
-      linearconstraint = np.array([1, x, x**2, x**3, x**4]),
+      linearconstraint = np.array([0, 0, 0, 0, 1]),
     )
 
   flatpoints = cubicformula(np.array([b, 2*c, 3*d, 4*e]))
