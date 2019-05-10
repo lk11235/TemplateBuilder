@@ -299,7 +299,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     try:
       if np.any(np.nonzero(x0)):
-        multiply = 10 ** -np.min(np.floor(np.log10(abs(x0[np.nonzero(x0)]))))
+        multiply = 10 ** -np.min(np.floor(np.log10(sigma)))
       else:
         multiply = 1
     except:
