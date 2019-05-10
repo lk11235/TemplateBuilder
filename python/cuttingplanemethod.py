@@ -13,23 +13,26 @@ logger = logging.getLogger("cuttingplanemethod")
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
   def __init__(self, x0, sigma, maxfractionaladjustment=0):
+    if x0.shape != sigma.shape:
+      raise ValueError("x0 and sigma have different shapes: {}, {}".format(x0.shape, sigma.shape))
+
+    if len(x0.shape) == 1:
+      x0 = np.array([[_] for _ in x0])
+      sigma = np.array([[_] for _ in sigma])
+
     if len(x0) != self.xsize:
       raise ValueError("len(x0) should be {}, is actually {}".format(self.xsize, len(x0)))
     if len(sigma) != self.xsize:
       raise ValueError("len(sigma) should be {}, is actually {}".format(self.xsize, len(sigma)))
-    if x0.shape != sigma.shape:
-      raise ValueError("x0 and sigma have different shapes: {}, {}".format(x0.shape, sigma.shape))
 
+    self.__x0 = x0
+    self.__sigma = sigma
     self.__constraints = []
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
     x = self.__x = cp.Variable(self.xsize)
 
     self.__loglikelihood = 0
-
-    if len(x0.shape) == 1:
-      x0 = np.array([x0])
-      sigma = np.array([sigma])
 
     for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
       shiftandscale = (self.__x - x0column) / sigmacolumn
@@ -54,6 +57,12 @@ class CuttingPlaneMethodBase(object):
     if self.__results is not None:
       raise RuntimeError("Can't iterate, already finished")
 
+    if not self.__constraints:
+      logger.info("x0:")
+      logger.info(str(self.__x0))
+      logger.info("sigma:")
+      logger.info(str(self.__sigma))
+
     toprint = "starting iteration {}".format(len(self.__constraints)+1)
     logger.info("="*len(toprint))
     logger.info(toprint)
@@ -63,7 +72,16 @@ class CuttingPlaneMethodBase(object):
       self.__minimize,
       self.__constraints,
     )
-    prob.solve()
+
+    solvekwargs = {
+      "solver": cp.MOSEK,
+    }
+    try:
+      prob.solve(**solvekwargs)
+    except Exception as e:
+      if "solve with verbose=True" in str(e):
+        prob.solve(verbose=True, **solvekwargs)
+      raise
 
     x = self.__x.value
 
@@ -145,6 +163,6 @@ if __name__ == "__main__":
   a[2] = -1
   print CuttingPlaneMethod4DQuartic(
     a,
-    a,
+    abs(a),
     maxfractionaladjustment=1e-6,
   ).run()
