@@ -277,6 +277,15 @@ def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallpara
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
 def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
+  if not np.any(coeffs):
+    return optimize.OptimizeResult(
+      x=np.array([0]),
+      success=True,
+      status=2,
+      message="polynomial is constant 0",
+      fun=0,
+      linearconstraint=np.array([1 if i==0 else 0 for i in range(len(coeffs))])
+    )
   polynomial = getpolynomialnd(d, n, coeffs)
   criticalpoints = list(findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, **kwargs))
   minimum = float("inf")
