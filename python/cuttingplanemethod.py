@@ -103,27 +103,36 @@ class CuttingPlaneMethodBase(object):
         message="finished successfully",
         fun=prob.value
       )
-    elif -minvalue < x[0] * self.__maxfractionaladjustment:
+      return
+
+    if -minvalue < x[0] * self.__maxfractionaladjustment:
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
+
       oldx0 = x[0]
+      multiplier = 1
       while minvalue < 0:
+        lastx0 = x[0]
         print x[0], minvalue
-        x[0] -= minvalue - np.finfo(float).eps
+        x[0] -= minvalue - multiplier*np.finfo(float).eps
+        if x[0] == lastx0: multiplier += 1
         minvalue = self.evalconstraint(x).fun
-      logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[0] / oldx0 - 1, minvalue)
-      logger.info("Approximate minimum of the target function is {} at {}".format(self.__loglikelihood.value, x))
-      self.__results = optimize.OptimizeResult(
-        x=x,
-        success=True,
-        status=2,
-        nit=len(self.__constraints)+1,
-        maxcv=0,
-        message="multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
-        fun=self.__loglikelihood.value
-      )
-    else:
-      logger.info("Minimum of the constraint polynomial is %g --> adding a new constraint using this minimum", minvalue)
-      self.__constraints.append(cp.matmul(minimizepolynomial.linearconstraint, self.__x) >= np.finfo(float).eps)
+
+      if x[0] / oldx0 - 1 < self.__maxfractionaladjustment:
+        logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[0] / oldx0 - 1, minvalue)
+        logger.info("Approximate minimum of the target function is {} at {}".format(self.__loglikelihood.value, x))
+        self.__results = optimize.OptimizeResult(
+          x=x,
+          success=True,
+          status=2,
+          nit=len(self.__constraints)+1,
+          maxcv=0,
+          message="multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
+          fun=self.__loglikelihood.value
+        )
+        return
+
+    logger.info("Minimum of the constraint polynomial is %g --> adding a new constraint using this minimum", minvalue)
+    self.__constraints.append(cp.matmul(minimizepolynomial.linearconstraint, self.__x) >= np.finfo(float).eps)
 
   def run(self, *args, **kwargs):
     while not self.__results: self.iterate(*args, **kwargs)
