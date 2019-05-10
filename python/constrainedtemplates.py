@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import abc, copy, cStringIO, itertools, logging, textwrap
+import abc, copy, itertools, textwrap
 
 import numpy as np
 from scipy import optimize
@@ -310,18 +310,13 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
     cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
     mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
-    log_stream = cStringIO.StringIO()
     try:
       if cachekey not in self.__fitresultscache:
-        logger = logging.getLogger("cuttingplanemethod")
-        logger.addHandler(logging.StreamHandler(log_stream))
-        logger.setLevel(logging.INFO)
         fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
           x0*multiply,
           sigma*multiply,
           maxfractionaladjustment=1e-6,
         )
-        del logger.handlers[-1]
         if all(t.mirrortype for t in self.templates):
           self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
             x=self.applymirrortoarray(fitresult.x),
@@ -334,7 +329,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       fitresult = self.__fitresultscache[cachekey]
 
     except:
-      print(log_stream.getvalue())
       raise
 
     finalbincontents = fitresult.x / multiply

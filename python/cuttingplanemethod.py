@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import abc, itertools, logging, sys
+import abc, cStringIO, itertools, logging, sys
 
 import numpy as np
 import cvxpy as cp
@@ -12,7 +12,7 @@ logger = logging.getLogger("cuttingplanemethod")
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True):
+  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printlogaterror=True):
     if x0.shape != sigma.shape:
       raise ValueError("x0 and sigma have different shapes: {}, {}".format(x0.shape, sigma.shape))
 
@@ -30,8 +30,17 @@ class CuttingPlaneMethodBase(object):
     self.__constraints = []
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
+
     self.__reportdeltafun = reportdeltafun
     self.__funatminimum = 0
+
+    self.__printlogaterror = printlogaterror
+    if printlogaterror:
+      self.__logstream = cStringIO.StringIO()
+      self.__logstreamhandler = logging.StreamHandler(self.__logstream)
+      logger.addHandler(self.__logstreamhandler)
+      logger.setLevel(logging.INFO)
+
     x = self.__x = cp.Variable(self.xsize)
 
     self.__loglikelihood = 0
@@ -41,6 +50,10 @@ class CuttingPlaneMethodBase(object):
       self.__loglikelihood += cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
 
     self.__minimize = cp.Minimize(self.__loglikelihood)
+
+  def __del__(self):
+    if self.__printlogaterror:
+      logger.handlers.remove(self.__logstreamhandler)
 
   @abc.abstractproperty
   def xsize(self): "can just be a class member"
@@ -80,7 +93,9 @@ class CuttingPlaneMethodBase(object):
     }
     try:
       prob.solve(**solvekwargs)
-    except Exception as e:
+    except BaseException as e:
+      if self.__printlogaterror:
+        print self.__logstream.getvalue()
       if "solve with verbose=True" in str(e):
         prob.solve(verbose=True, **solvekwargs)
       raise
