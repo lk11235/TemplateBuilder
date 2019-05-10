@@ -12,7 +12,7 @@ logger = logging.getLogger("cuttingplanemethod")
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, maxfractionaladjustment=0):
+  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True):
     if x0.shape != sigma.shape:
       raise ValueError("x0 and sigma have different shapes: {}, {}".format(x0.shape, sigma.shape))
 
@@ -30,6 +30,8 @@ class CuttingPlaneMethodBase(object):
     self.__constraints = []
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
+    self.__reportdeltafun = reportdeltafun
+    self.__funatminimum = 0
     x = self.__x = cp.Variable(self.xsize)
 
     self.__loglikelihood = 0
@@ -85,7 +87,10 @@ class CuttingPlaneMethodBase(object):
 
     x = self.__x.value
 
-    logger.info("found minimum {} at {}".format(prob.value, x))
+    if self.__reportdeltafun and not self.__constraints:
+      self.__funatminimum = prob.value
+
+    logger.info("found minimum {} at {}".format(prob.value - self.__funatminimum, x))
 
     #does it satisfy the constraints?
 
@@ -101,7 +106,7 @@ class CuttingPlaneMethodBase(object):
         nit=len(self.__constraints)+1,
         maxcv=0,
         message="finished successfully",
-        fun=prob.value
+        fun=prob.value - self.__funatminimum
       )
       return
 
@@ -127,7 +132,7 @@ class CuttingPlaneMethodBase(object):
           nit=len(self.__constraints)+1,
           maxcv=0,
           message="multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
-          fun=self.__loglikelihood.value
+          fun=self.__loglikelihood.value - self.__funatminimum
         )
         return
 
@@ -168,8 +173,8 @@ def cuttingplanemethod4dquartic(*args, **kwargs):
 if __name__ == "__main__":
   logger.setLevel(logging.INFO)
   logger.addHandler(logging.StreamHandler(sys.stdout))
-  a = np.array([1]*70)
-  a[2] = -1
+  a = np.array([[1, 2]]*70)
+  a[2,:] *= -1
   print CuttingPlaneMethod4DQuartic(
     a,
     abs(a),
