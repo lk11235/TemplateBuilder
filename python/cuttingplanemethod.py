@@ -106,7 +106,7 @@ class CuttingPlaneMethodBase(object):
     if self.__reportdeltafun and not self.__constraints:
       self.__funatminimum = prob.value
 
-    logger.info("found minimum {} at {}".format(prob.value - self.__funatminimum, x))
+    logger.info("found minimum {} at:\n{}".format(prob.value - self.__funatminimum, x))
 
     #does it satisfy the constraints?
 
@@ -152,7 +152,7 @@ class CuttingPlaneMethodBase(object):
         )
         return
 
-    logger.info("Minimum of the constraint polynomial is %g --> adding a new constraint using this minimum", minvalue)
+    logger.info("Minimum of the constraint polynomial is {} at {} --> adding a new constraint using this minimum:\n{}".format(minvalue, minimizepolynomial.x, minimizepolynomial.linearconstraint))
     self.__constraints.append(cp.matmul(minimizepolynomial.linearconstraint, self.__x) >= np.finfo(float).eps)
 
   def run(self, *args, **kwargs):
