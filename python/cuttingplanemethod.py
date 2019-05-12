@@ -98,7 +98,8 @@ class CuttingPlaneMethodBase(object):
         print self.__logstream.getvalue()
       if "solve with verbose=True" in str(e):
         prob.solve(verbose=True, **solvekwargs)
-      raise
+      else:
+        raise
 
     x = self.__x.value
 
