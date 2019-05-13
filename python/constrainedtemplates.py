@@ -188,7 +188,7 @@ class ConstrainedTemplatesBase(object):
         if bincontentabs[othername].s < bincontentabs[name].s: continue
         if debugprint: print("here with", othername)
         if relativeerror[othername] <= relativeerror[name] * (
-          (1+1.5*kspoissongaussian(1/relativeerror[name]**2))
+          (1 + 1.5 * np.log10(bincontentabs[othername].s / bincontentabs[name].s) * kspoissongaussian(1/relativeerror[name]**2))
         ):
           if debugprint: print("here 2 with", othername)
           if errortoset is None: errortoset = 0
