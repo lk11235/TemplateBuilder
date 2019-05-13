@@ -115,8 +115,9 @@ class ConstrainedTemplatesBase(object):
 
       try:
         finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents, bincontentsabs)
-      except:
+      except BaseException as e:
         print("Error when finding content for bin", x, y, z)
+        if hasattr(e, "thingtoprint"): print(e.thingtoprint)
         raise
 
       for t, content in itertools.izip(self.templates, finalbincontents):
@@ -325,7 +326,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
           )
       fitresult = self.__fitresultscache[cachekey]
 
-    except:
+    except BaseException as e:
+      e.thingtoprint = thingtoprint
       raise
 
     finalbincontents = fitresult.x / multiply
