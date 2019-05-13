@@ -298,10 +298,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     mirroredx0 = self.applymirrortoarray(x0)
 
     try:
-      if np.any(np.nonzero(x0)):
-        multiply = 10 ** -np.min(np.floor(np.log10(sigma)))
-      else:
-        multiply = 1
+      multiply = 10 ** -np.min(np.floor(np.log10(sigma)))
     except:
       print("Error (probably a math error) involving x0:")
       print(x0)

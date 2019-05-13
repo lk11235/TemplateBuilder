@@ -100,25 +100,22 @@ class CuttingPlaneMethodBase(object):
     }
     try:
       prob.solve(**solvekwargs)
+      x = self.__x.value
+
+      if self.__reportdeltafun and not self.__constraints:
+        self.__funatminimum = prob.value
+
+      logger.info("found minimum {} at:\n{}".format(prob.value - self.__funatminimum, x))
+
+      #does it satisfy the constraints?
+
+      minimizepolynomial = self.evalconstraint(x)
+      minvalue = minimizepolynomial.fun
     except BaseException as e:
       if self.__printlogaterror:
         print self.__logstream.getvalue()
-      if "solve with verbose=True" in str(e):
-        prob.solve(verbose=True, **solvekwargs)
-      else:
-        raise
-
-    x = self.__x.value
-
-    if self.__reportdeltafun and not self.__constraints:
-      self.__funatminimum = prob.value
-
-    logger.info("found minimum {} at:\n{}".format(prob.value - self.__funatminimum, x))
-
-    #does it satisfy the constraints?
-
-    minimizepolynomial = self.evalconstraint(x)
-    minvalue = minimizepolynomial.fun
+      prob.solve(verbose=True, **solvekwargs)
+      raise
 
     if minvalue >= 0:
       logger.info("Minimum of the constraint polynomial is %g --> finished successfully!", minvalue)
