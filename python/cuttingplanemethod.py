@@ -43,11 +43,18 @@ class CuttingPlaneMethodBase(object):
 
     x = self.__x = cp.Variable(self.xsize)
 
-    self.__loglikelihood = 0
-
+    shiftandscale_quadraticterm = shiftandscale_linearterm = shiftandscale_constantterm = 0
     for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
-      shiftandscale = (self.__x - x0column) / sigmacolumn
-      self.__loglikelihood += cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
+      #shiftandscale = (self.__x - x0column) / sigmacolumn
+      #self.__loglikelihood += cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
+      shiftandscale_quadraticterm += np.diag(1 / sigmacolumn**2)
+      shiftandscale_linearterm += -2 * x0column / sigmacolumn**2
+      shiftandscale_constantterm += sum(x0column**2 / sigmacolumn**2)
+
+    quadraticterm = cp.quad_form(x, shiftandscale_quadraticterm)
+    linearterm = cp.matmul(shiftandscale_linearterm, x)
+    constantterm = shiftandscale_constantterm
+    self.__loglikelihood = quadraticterm + linearterm + constantterm
 
     self.__minimize = cp.Minimize(self.__loglikelihood)
 
@@ -140,7 +147,7 @@ class CuttingPlaneMethodBase(object):
 
       if x[0] / oldx0 - 1 < self.__maxfractionaladjustment:
         logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[0] / oldx0 - 1, minvalue)
-        logger.info("Approximate minimum of the target function is {} at {}".format(self.__loglikelihood.value, x))
+        logger.info("Approximate minimum of the target function is {} at {}".format(self.__loglikelihood.value - self.__funatminimum, x))
         self.__results = optimize.OptimizeResult(
           x=x,
           success=True,
@@ -189,7 +196,7 @@ def cuttingplanemethod4dquartic(*args, **kwargs):
 if __name__ == "__main__":
   logger.setLevel(logging.INFO)
   logger.addHandler(logging.StreamHandler(sys.stdout))
-  a = np.array([[1, 2]]*70)
+  a = np.array([[1, 2.]]*70)
   a[2,:] *= -1
   print CuttingPlaneMethod4DQuartic(
     a,
