@@ -58,6 +58,15 @@ class CuttingPlaneMethodBase(object):
 
     self.__minimize = cp.Minimize(self.__loglikelihood)
 
+    logger.info("x0:")
+    logger.info(str(self.__x0))
+    logger.info("sigma:")
+    logger.info(str(self.__sigma))
+    logger.info("quadratic coefficients:")
+    logger.info(str(np.diag(shiftandscale_quadraticterm)))
+    logger.info("linear coefficients:")
+    logger.info(str(shiftandscale_linearterm))
+
   def __del__(self):
     if self.__printlogaterror:
       logger.handlers.remove(self.__logstreamhandler)
@@ -78,12 +87,6 @@ class CuttingPlaneMethodBase(object):
   def iterate(self):
     if self.__results is not None:
       raise RuntimeError("Can't iterate, already finished")
-
-    if not self.__constraints:
-      logger.info("x0:")
-      logger.info(str(self.__x0))
-      logger.info("sigma:")
-      logger.info(str(self.__sigma))
 
     toprint = "starting iteration {}".format(len(self.__constraints)+1)
     logger.info("="*len(toprint))
