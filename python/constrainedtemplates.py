@@ -297,48 +297,57 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
         thingtoprint += "\n"+fmt.format(*fmtargs)
 
-    mirroredx0 = self.applymirrortoarray(x0)
-
-    try:
-      multiply = 10 ** -np.min(np.floor(np.log10(sigma)))
-    except:
-      print("Error (probably a math error) involving x0:")
-      print(x0)
-      print()
-      raise
-
-    cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
-    mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
-    try:
-      if cachekey not in self.__fitresultscache:
-        fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
-          x0*multiply,
-          sigma*multiply,
-          maxfractionaladjustment=1e-6,
-        )
-        if all(t.mirrortype for t in self.templates):
-          self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
-            x=self.applymirrortoarray(fitresult.x),
-            fun=fitresult.fun,
-            message="(mirrored) "+fitresult.message,
-            status=fitresult.status,
-            nit=fitresult.nit,
-            maxcv=fitresult.maxcv
-          )
-      fitresult = self.__fitresultscache[cachekey]
-
-    except BaseException as e:
-      e.thingtoprint = thingtoprint
-      raise
-
-    finalbincontents = fitresult.x / multiply
-
-    if fitresult.nit == 1:
-      fitprintmessage = "global minimum already satisfies constraint"
+    if not np.any(np.nonzero(x0)):
+      finalbincontents = np.array([0]*self.ntemplates)
+      fitprintmessage = "all templates have zero content for this bin"
+    elif np.all(len(_[np.nonzero(_)]) == 1 for _ in x0):
+      finalbincontents = [
+        _[np.nonzero(_)][0] for _ in x0
+      ]
+      fitprintmessage = "only one reweighted sample has events in this bin, using that directly"
     else:
-      fitprintmessage = str(fitresult)
-      warning.append("fit converged in {0.nit} with NLL = {0.fun}".format(fitresult))
-      warning.append(fitresult.message)
+      mirroredx0 = self.applymirrortoarray(x0)
+
+      try:
+        multiply = 10 ** -np.min(np.floor(np.log10(sigma)))
+      except:
+        print("Error (probably a math error) involving x0:")
+        print(x0)
+        print()
+        raise
+
+      cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
+      mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
+      try:
+        if cachekey not in self.__fitresultscache:
+          fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
+            x0*multiply,
+            sigma*multiply,
+            maxfractionaladjustment=1e-6,
+          )
+          if all(t.mirrortype for t in self.templates):
+            self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
+              x=self.applymirrortoarray(fitresult.x),
+              fun=fitresult.fun,
+              message="(mirrored) "+fitresult.message,
+              status=fitresult.status,
+              nit=fitresult.nit,
+              maxcv=fitresult.maxcv
+            )
+        fitresult = self.__fitresultscache[cachekey]
+
+      except BaseException as e:
+        e.thingtoprint = thingtoprint
+        raise
+
+      finalbincontents = fitresult.x / multiply
+
+      if fitresult.nit == 1:
+        fitprintmessage = "global minimum already satisfies constraint"
+      else:
+        fitprintmessage = str(fitresult)
+        warning.append("fit converged in {0.nit} with NLL = {0.fun}".format(fitresult))
+        warning.append(fitresult.message)
 
     thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
     for name, content in itertools.izip(self.templatenames, finalbincontents):
