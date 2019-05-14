@@ -6,7 +6,7 @@ import numpy as np
 import cvxpy as cp
 from scipy import optimize
 
-from polynomialalgebra import minimizepolynomialnd, minimizequadratic, minimizequartic
+from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizequadratic, minimizequartic
 
 logger = logging.getLogger("cuttingplanemethod")
 
@@ -160,7 +160,14 @@ class CuttingPlaneMethodBase(object):
         return
 
     logger.info("Minimum of the constraint polynomial is {} at {} --> adding a new constraint using this minimum:\n{}".format(minvalue, minimizepolynomial.x, minimizepolynomial.linearconstraint))
-    self.__constraints.append(cp.matmul(minimizepolynomial.linearconstraint, self.__x) >= np.finfo(float).eps)
+    self.__constraints.append(
+      cp.matmul(
+        minimizepolynomial.linearconstraint[self.useconstraintindices,],
+        self.__x
+      ) >= np.finfo(float).eps
+    )
+
+  useconstraintindices = slice(None, None, None)
 
   def run(self, *args, **kwargs):
     while not self.__results: self.iterate(*args, **kwargs)
@@ -184,6 +191,24 @@ class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodBase):
   def evalconstraint(self, coeffs):
     return minimizepolynomialnd(4, 4, coeffs)
 
+class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodBase):
+  xsize = 65
+  def insertzeroatindices():
+    for idx, (coeff, variables) in enumerate(getpolynomialndmonomials(4, 4, [1]*70)):
+      if variables["z"] >= 3:
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+
+  useconstraintindices = range(70)
+  for _ in insertzeroatindices: useconstraintindices.remove(_)
+  del _
+
+  def evalconstraint(self, coeffs):
+    coeffs = iter(coeffs)
+    newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
+    for remaining in coeffs: assert False
+    return minimizepolynomialnd(4, 4, newcoeffs)
+
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod1dquartic(*args, **kwargs):
@@ -192,6 +217,8 @@ def cuttingplanemethod4dquadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
+def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_4thVariableQuadratic(*args, **kwargs).run()
 
 if __name__ == "__main__":
   logger.setLevel(logging.INFO)

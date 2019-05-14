@@ -7,7 +7,7 @@ from scipy import optimize
 from uncertainties import ufloat
 
 from moremath import kspoissongaussian, weightedaverage
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic
 
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
@@ -17,6 +17,7 @@ def ConstrainedTemplates(constrainttype, *args, **kwargs):
     "oneparameterVVH": OneParameterVVH,
     "fourparameterggH": FourParameterggH,
     "fourparameterVVH": FourParameterVVH,
+    "fourparameterWWH": FourParameterWWH,
   }[constrainttype](*args, **kwargs)
 
 class ConstrainedTemplatesBase(object):
@@ -441,3 +442,16 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
   )
   pureindices = 0, 35, 55, 65, 69
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic)
+
+class FourParameterWWH(ConstrainedTemplatesWithFit):
+  gZ3indices = tuple(i for i, _ in enumerate(FourParameterVVH.templatenames) if "gl3" in _ or _ == "l")
+  #https://stackoverflow.com/q/13905741/5228524
+  templatenames = (
+    lambda gZ3indices=gZ3indices:
+    tuple(name for i, name in enumerate(FourParameterVVH.templatenames) if i not in gZ3indices)
+  )()
+  pureindices = (
+    lambda gZ3indices=gZ3indices:
+    tuple(index - sum(1 for i in gZ3indices if i < index) for index in FourParameterVVH.pureindices if index not in gZ3indices)
+  )()
+  cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic)
