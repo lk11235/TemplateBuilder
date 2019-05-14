@@ -359,15 +359,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
     self.__fitresultscache = {}
 
-  def makeNLL(self, x0, sigma, nbincontents, multiply):
-    def negativeloglikelihood(x):
-      return sum(
-        ((x[j]/multiply - x0[j][i]) / sigma[j][i]) ** 2
-        for i in xrange(nbincontents)
-        for j in xrange(self.ntemplates)
-      )
-    return negativeloglikelihood
-
   @abc.abstractproperty
   def pureindices(self): "can be a class member"
   @abc.abstractmethod
