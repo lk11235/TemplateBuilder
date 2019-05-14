@@ -27,7 +27,8 @@ class CuttingPlaneMethodBase(object):
 
     self.__x0 = x0
     self.__sigma = sigma
-    self.__constraints = []
+    self.__cuttingplanes = []
+    self.__otherconstraints = []
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
 
@@ -42,30 +43,67 @@ class CuttingPlaneMethodBase(object):
       logger.setLevel(logging.INFO)
 
     x = self.__x = cp.Variable(self.xsize)
+    self.__t = None
 
-    shiftandscale_quadraticterm = shiftandscale_linearterm = shiftandscale_constantterm = 0
+    #===================================================================
+    #simplest approach:
+    #for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
+    #  shiftandscale = (self.__x - x0column) / sigmacolumn
+    #  self.__tominimize += cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
+    #this is inefficient because the code doesn't treat a sum of quad_forms nicely
+    #===================================================================
+
+    #===================================================================
+    #second approach:
+    #shiftandscale_quadraticterm = shiftandscale_linearterm = shiftandscale_constantterm = 0
+    #for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
+    #  shiftandscale_quadraticterm += np.diag(1 / sigmacolumn**2)
+    #  shiftandscale_linearterm += -2 * x0column / sigmacolumn**2
+    #  shiftandscale_constantterm += sum(x0column**2 / sigmacolumn**2)
+
+    #quadraticterm = cp.quad_form(x, shiftandscale_quadraticterm)
+    #linearterm = cp.matmul(shiftandscale_linearterm, x)
+    #constantterm = shiftandscale_constantterm
+    #self.__tominimize = quadraticterm + linearterm + constantterm
+    #===================================================================
+
+    #===================================================================
+    #third approach, starts out the same as the second with a change in notation
+    Q = c = r = 0
     for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
-      #shiftandscale = (self.__x - x0column) / sigmacolumn
-      #self.__loglikelihood += cp.quad_form(shiftandscale, np.diag([1]*self.xsize))
-      shiftandscale_quadraticterm += np.diag(1 / sigmacolumn**2)
-      shiftandscale_linearterm += -2 * x0column / sigmacolumn**2
-      shiftandscale_constantterm += sum(x0column**2 / sigmacolumn**2)
+      #note the 2 here!
+      Q += 2 * np.diag(1 / sigmacolumn**2)
+      c += -2 * x0column / sigmacolumn**2
+      r += sum(x0column**2 / sigmacolumn**2)
+    #we are minimizing 1/2 x^T Q x + c^T x + r, as in https://docs.mosek.com/modeling-cookbook/cqo.html#equation-eq-cqo-qcqo
 
-    quadraticterm = cp.quad_form(x, shiftandscale_quadraticterm)
-    linearterm = cp.matmul(shiftandscale_linearterm, x)
-    constantterm = shiftandscale_constantterm
-    self.__loglikelihood = quadraticterm + linearterm + constantterm
+    #we now want to reformulate this into a conic.  relevant links:
+    #https://docs.mosek.com/whitepapers/qmodel.pdf
+    #https://docs.mosek.com/modeling-cookbook/cqo.html#quadratically-constrained-quadratic-optimization
+    #https://docs.mosek.com/modeling-cookbook/cqo.html#rotated-quadratic-cones
+    #https://www.cvxpy.org/examples/basic/socp.html
+    F = Q ** .5
+    np.testing.assert_allclose(np.matmul(F.T, F), Q)
+    t = self.__t = cp.Variable()
+    self.__tominimize = t + cp.matmul(c, x) + r
+    self.__otherconstraints.append(cp.SOC(2*t, cp.matmul(F, x)))
+    #the benefits of reformulating are greatest if F is smaller than Q
+    #that's not the case here
+    #however, we also get the benefit of using smaller numbers
+    #the numbers in F are closer to 1 than the numbers in Q,
+    #so we reduce the spread in orders of magnitude by a factor of 2.
+    #===================================================================
 
-    self.__minimize = cp.Minimize(self.__loglikelihood)
+    self.__minimize = cp.Minimize(self.__tominimize)
 
     logger.info("x0:")
     logger.info(str(self.__x0))
     logger.info("sigma:")
     logger.info(str(self.__sigma))
-    logger.info("quadratic coefficients:")
-    logger.info(str(np.diag(shiftandscale_quadraticterm)))
+    logger.info("F matrix:")
+    logger.info(str(np.diag(F)))
     logger.info("linear coefficients:")
-    logger.info(str(shiftandscale_linearterm))
+    logger.info(str(c))
 
   def __del__(self):
     if self.__printlogaterror:
@@ -88,14 +126,14 @@ class CuttingPlaneMethodBase(object):
     if self.__results is not None:
       raise RuntimeError("Can't iterate, already finished")
 
-    toprint = "starting iteration {}".format(len(self.__constraints)+1)
+    toprint = "starting iteration {}".format(len(self.__cuttingplanes)+1)
     logger.info("="*len(toprint))
     logger.info(toprint)
     logger.info("="*len(toprint))
 
     prob = cp.Problem(
       self.__minimize,
-      self.__constraints,
+      self.__otherconstraints + self.__cuttingplanes,
     )
 
     solvekwargs = {
@@ -105,7 +143,7 @@ class CuttingPlaneMethodBase(object):
       prob.solve(**solvekwargs)
       x = self.__x.value
 
-      if self.__reportdeltafun and not self.__constraints:
+      if self.__reportdeltafun and not self.__cuttingplanes:
         self.__funatminimum = prob.value
 
       logger.info("found minimum {} at:\n{}".format(prob.value - self.__funatminimum, x))
@@ -126,7 +164,7 @@ class CuttingPlaneMethodBase(object):
         x=x,
         success=True,
         status=1,
-        nit=len(self.__constraints)+1,
+        nit=len(self.__cuttingplanes)+1,
         maxcv=0,
         message="finished successfully",
         fun=prob.value - self.__funatminimum
@@ -147,20 +185,20 @@ class CuttingPlaneMethodBase(object):
 
       if x[0] / oldx0 - 1 < self.__maxfractionaladjustment:
         logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[0] / oldx0 - 1, minvalue)
-        logger.info("Approximate minimum of the target function is {} at {}".format(self.__loglikelihood.value - self.__funatminimum, x))
+        logger.info("Approximate minimum of the target function is {} at {}".format(self.__tominimize.value - self.__funatminimum, x))
         self.__results = optimize.OptimizeResult(
           x=x,
           success=True,
           status=2,
-          nit=len(self.__constraints)+1,
+          nit=len(self.__cuttingplanes)+1,
           maxcv=0,
           message="multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
-          fun=self.__loglikelihood.value - self.__funatminimum
+          fun=self.__tominimize.value - self.__funatminimum
         )
         return
 
     logger.info("Minimum of the constraint polynomial is {} at {} --> adding a new constraint using this minimum:\n{}".format(minvalue, minimizepolynomial.x, minimizepolynomial.linearconstraint))
-    self.__constraints.append(
+    self.__cuttingplanes.append(
       cp.matmul(
         minimizepolynomial.linearconstraint[self.useconstraintindices,],
         self.__x
