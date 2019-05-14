@@ -300,7 +300,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     if not np.any(np.nonzero(x0)):
       finalbincontents = np.array([0]*self.ntemplates)
       fitprintmessage = "all templates have zero content for this bin"
-    elif np.all(len(_[np.nonzero(_)]) == 1 for _ in x0):
+    elif all(len(_[np.nonzero(_)]) == 1 for _ in x0):
       finalbincontents = [
         _[np.nonzero(_)][0] for _ in x0
       ]
