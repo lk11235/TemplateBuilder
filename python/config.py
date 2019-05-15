@@ -231,9 +231,12 @@ class TemplateBuilder(object):
     self.__force = kwargs.pop("force", False)
     self.__debug = kwargs.pop("debug", False)
     self.__useexistingcomponents = kwargs.pop("useexistingcomponents", False)
+    self.__useexistingtemplates = kwargs.pop("useexistingtemplates", False)
     self.__binsortkey = kwargs.pop("binsortkey", None)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
+    if self.__useexistingtemplates and not self.__useexistingcomponents:
+      raise ValueError("Can't do useexistingtemplates without useexistingcomponents")
 
   def maketemplates(self):
     templates = []
@@ -303,6 +306,7 @@ class TemplateBuilder(object):
               templateconfig["variables"][2], templateconfig["binning"]["bins"][6], templateconfig["binning"]["bins"][7], templateconfig["binning"]["bins"][8],
               templateconfig["selection"], templateconfig["weight"],
               mirrortype, scaleby, floor,
+              reuseifexists=self.__useexistingtemplates,
             )
 
             templates.append(template)
