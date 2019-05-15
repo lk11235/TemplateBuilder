@@ -189,7 +189,7 @@ class ConstrainedTemplatesBase(object):
       errortoset = None
       for othername in bincontent:
         #look at the other names that have bigger errors but comparable relative errors
-        if bincontentabs[othername].s < bincontentabs[name].s: continue
+        if bincontentabs[othername].s <= bincontentabs[name].s: continue
         if bincontentabs[name].s == 0: continue
         if debugprint: print("here with", othername)
         if relativeerror[othername] <= relativeerror[name] * (
@@ -236,7 +236,7 @@ class OneTemplate(ConstrainedTemplatesBase):
     fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
     fmt2 = fmt1 + " (was +/-{:10.3e})"
     fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
-    fmt4 = fmt2 + " (sum of abs weights {:10.3e})"
+    fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
     for i, (name, content) in enumerate(bincontent.iteritems()):
       fmt = {
         (True, True): fmt1,
@@ -245,11 +245,11 @@ class OneTemplate(ConstrainedTemplatesBase):
         (False, False): fmt4,
       }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
       fmtargs = [name, content]
-      if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name])
-      if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name])
+      if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name].s)
+      if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
       thingtoprint += "\n"+fmt.format(*fmtargs)
 
-    thingtoprint += "\n"+fmt.format("final", finalbincontent)
+    thingtoprint += "\n"+fmt1.format("final", finalbincontent)
 
     return [finalbincontent], thingtoprint, warning
 

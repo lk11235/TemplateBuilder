@@ -21,6 +21,7 @@ class Template(object):
     filenames = [tree.filename for tree in trees]
     commonprefix = os.path.commonprefix(filenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in filenames))[::-1]
+    assert commonprefix + "plain" + commonsuffix not in filenames
 
     self.__name = name
     self.__printprefix = printprefix
@@ -58,17 +59,26 @@ class Template(object):
 
       self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = False
 
+    subdirectories = [
+      tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1]
+      for tree in trees
+    ]
+    assert "plain" not in subdirectories
+    for i, _ in enumerate(subdirectories):
+      if not _:
+        subdirectories[i] = "plain"
+
     self.__templatecomponenthandles = [
       tree.registertemplatecomponent(
-        name+"_"+tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1], printprefix,
+        name+"_"+subdirectory, printprefix,
         xformula, xbins, xmin, xmax,
         yformula, ybins, ymin, ymax,
         zformula, zbins, zmin, zmax,
         cutformula, weightformula,
         mirrortype, scaleby,
-        subdirectory=tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1],
+        subdirectory=subdirectory,
       )
-      for i, tree in enumerate(trees)
+      for i, (tree, subdirectory) in enumerate(itertools.izip(trees, subdirectories))
     ]
 
   @property
