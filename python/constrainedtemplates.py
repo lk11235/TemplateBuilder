@@ -7,7 +7,7 @@ from scipy import optimize
 from uncertainties import ufloat
 
 from moremath import kspoissongaussian, weightedaverage
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic
 
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
@@ -15,6 +15,7 @@ def ConstrainedTemplates(constrainttype, *args, **kwargs):
     "unconstrained": OneTemplate,
     "oneparameterggH": OneParameterggH,
     "oneparameterVVH": OneParameterVVH,
+    "threeparameterggH": ThreeParameterggH,
     "fourparameterggH": FourParameterggH,
     "fourparameterVVH": FourParameterVVH,
     "fourparameterWWH": FourParameterWWH,
@@ -170,6 +171,8 @@ class ConstrainedTemplatesBase(object):
       raise ValueError("array should have length {}".format(len(self.templates)))
     return np.array([
       {"symmetric": 1, "antisymmetric": -1}[t.mirrortype] * s
+         if t.scaleby != 0
+         else 0 * s
       for t, s in itertools.izip(self.templates, array)
     ])
 
@@ -187,6 +190,7 @@ class ConstrainedTemplatesBase(object):
       for othername in bincontent:
         #look at the other names that have bigger errors but comparable relative errors
         if bincontentabs[othername].s < bincontentabs[name].s: continue
+        if bincontentabs[name].s == 0: continue
         if debugprint: print("here with", othername)
         if relativeerror[othername] <= relativeerror[name] * (
           (1 + 1.5 * np.log10(bincontentabs[othername].s / bincontentabs[name].s) * kspoissongaussian(1/relativeerror[name]**2))
@@ -213,7 +217,7 @@ class OneTemplate(ConstrainedTemplatesBase):
 
   def computefinalbincontents(self, bincontents, bincontentsabs):
     bincontent = bincontents[0].copy()
-    originalbincontent = copy.deepcopy(bincontent)
+    originalcontent = copy.deepcopy(bincontent)
     bincontentabs = bincontentsabs[0].copy()
     nbincontents = len(bincontent)
 
@@ -365,6 +369,16 @@ class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
   pureindices = 0, 4
   cuttingplanefunction = staticmethod(cuttingplanemethod1dquartic)
+
+class ThreeParameterggH(ConstrainedTemplatesWithFit):
+  templatenames = (
+    "SM", "g11gj1", "g11gk1", "g11gl1",
+    "j",  "gj1gk1", "gj1gl1",
+    "k",  "gk1gl1",
+    "l",
+  )
+  pureindices = 0, 4, 7, 9
+  cuttingplanefunction = staticmethod(cuttingplanemethod3dquadratic)
 
 class FourParameterggH(ConstrainedTemplatesWithFit):
   templatenames = (

@@ -279,6 +279,12 @@ class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
   monomials = list(getpolynomialndmonomials(4, 1))
   evalconstraint = staticmethod(minimizequartic)
 
+class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodBase):
+  xsize = 10
+  monomials = list(getpolynomialndmonomials(2, 3))
+  def evalconstraint(self, coeffs):
+    return minimizepolynomialnd(2, 3, coeffs)
+
 class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodBase):
   xsize = 15
   monomials = list(getpolynomialndmonomials(2, 4))
@@ -317,6 +323,8 @@ def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod1dquartic(*args, **kwargs):
   return CuttingPlaneMethod1DQuartic(*args, **kwargs).run()
+def cuttingplanemethod3dquadratic(*args, **kwargs):
+  return CuttingPlaneMethod3DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic(*args, **kwargs):

@@ -77,6 +77,8 @@ class Template(object):
   def printprefix(self): return self.__printprefix
   @property
   def mirrortype(self): return self.__mirrortype
+  @property
+  def scaleby(self): return self.__scaleby
 
   @property
   def xbins(self): return self.__xbins
