@@ -232,20 +232,23 @@ def getpolynomialnd(d, n, coeffs, mirrorindices=()):
 def getnvariableletters(n):
   return "abcdefghijklmnopqrstuvwxyz"[-n:]
 
-def getpolynomialndmonomials(d, n, coeffs, mirrorindices=()):
+def getpolynomialndmonomials(d, n, coeffs=None, mirrorindices=()):
   xand1 = "1" + getnvariableletters(n)
   assert len(xand1) == n+1
   mirrorarray = np.concatenate(([1.], [-1 if i in mirrorindices else 1 for i in xrange(n)]))
 
   for coeff, xsandmirrors in itertools.izip_longest(
-    coeffs,
+    coeffs if coeffs is not None else (),
     itertools.combinations_with_replacement(itertools.izip_longest(xand1, mirrorarray), d),
   ):
-    if coeff is None or xsandmirrors is None:
+    if (coeffs is not coeff is None) or xsandmirrors is None:
       raise RuntimeError("Provided {} coefficients, need {}".format(len(coeffs), len(list(itertools.combinations_with_replacement(xand1, 4)))))
     xs, mirrors = itertools.izip(*xsandmirrors)
     ctr = collections.Counter(xs)
-    yield coeff * np.prod(mirrors), ctr
+    if coeffs is None:
+      yield ctr
+    else:
+      yield coeff * np.prod(mirrors), ctr
 
 def differentiatemonomial(coeffandxs, variable):
   coeff, xs = coeffandxs

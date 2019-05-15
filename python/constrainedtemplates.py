@@ -308,21 +308,13 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     else:
       mirroredx0 = self.applymirrortoarray(x0)
 
-      try:
-        multiply = 10 ** -np.min(np.floor(np.log10(sigma)))
-      except:
-        print("Error (probably a math error) involving x0:")
-        print(x0)
-        print()
-        raise
-
       cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
       mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
       try:
         if cachekey not in self.__fitresultscache:
           fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
-            x0*multiply,
-            sigma*multiply,
+            x0,
+            sigma,
             maxfractionaladjustment=1e-6,
           )
           if all(t.mirrortype for t in self.templates):
@@ -340,7 +332,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         e.thingtoprint = thingtoprint
         raise
 
-      finalbincontents = fitresult.x / multiply
+      finalbincontents = fitresult.x
 
       if fitresult.nit == 1:
         fitprintmessage = "global minimum already satisfies constraint"

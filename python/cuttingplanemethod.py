@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import abc, cStringIO, itertools, logging, sys
+import abc, collections, cStringIO, itertools, logging, sys
 
 import numpy as np
 import cvxpy as cp
@@ -13,6 +13,9 @@ logger = logging.getLogger("cuttingplanemethod")
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
   def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printlogaterror=True):
+    x0 = np.array(x0)
+    sigma = np.array(sigma)
+
     if x0.shape != sigma.shape:
       raise ValueError("x0 and sigma have different shapes: {}, {}".format(x0.shape, sigma.shape))
 
@@ -25,8 +28,6 @@ class CuttingPlaneMethodBase(object):
     if len(sigma) != self.xsize:
       raise ValueError("len(sigma) should be {}, is actually {}".format(self.xsize, len(sigma)))
 
-    self.__x0 = x0
-    self.__sigma = sigma
     self.__cuttingplanes = []
     self.__otherconstraints = []
     self.__results = None
@@ -42,6 +43,9 @@ class CuttingPlaneMethodBase(object):
       logger.addHandler(self.__logstreamhandler)
       logger.setLevel(logging.INFO)
 
+    self.__initminimization(x0, sigma)
+
+  def __initminimization(self, x0, sigma):
     x = self.__x = cp.Variable(self.xsize)
     self.__t = None
 
@@ -71,7 +75,7 @@ class CuttingPlaneMethodBase(object):
     #third approach, starts out the same as the second with a change in notation
     Q = c = r = 0
     for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
-      #note the 2 here!
+      #note the 2 here! it's to get the 1/2 in 1/2 x^T Q x + c^T x + r
       Q += 2 * np.diag(1 / sigmacolumn**2)
       c += -2 * x0column / sigmacolumn**2
       r += sum(x0column**2 / sigmacolumn**2)
@@ -84,26 +88,75 @@ class CuttingPlaneMethodBase(object):
     #https://www.cvxpy.org/examples/basic/socp.html
     F = Q ** .5
     np.testing.assert_allclose(np.matmul(F.T, F), Q)
-    t = self.__t = cp.Variable()
-    self.__tominimize = t + cp.matmul(c, x) + r
-    self.__otherconstraints.append(cp.SOC(2*t, cp.matmul(F, x)))
     #the benefits of reformulating are greatest if F is smaller than Q
     #that's not the case here
     #however, we also get the benefit of using smaller numbers
     #the numbers in F are closer to 1 than the numbers in Q,
     #so we reduce the spread in orders of magnitude by a factor of 2.
-    #===================================================================
 
-    self.__minimize = cp.Minimize(self.__tominimize)
+    #now we want to scale the coefficients to get numbers even closer to 1.
+    #We could scale all the coefficients to have sigma=1.  This wouldn't help however,
+    #because we would have to scale them back in order to evaluate the nd polynomial
+    #and we'd get a linear constraint with big numbers, same as before.
+    #Instead, we want to scale the _variables_ of the nd polynomial, or in other words
+    #scale the coefficients according to how they multiply those variables.
+    #This doesn't affect whether the polynomial ever goes negative.
 
     logger.info("x0:")
-    logger.info(str(self.__x0))
+    logger.info(str(x0))
     logger.info("sigma:")
-    logger.info(str(self.__sigma))
+    logger.info(str(sigma))
     logger.info("F matrix:")
     logger.info(str(np.diag(F)))
     logger.info("linear coefficients:")
     logger.info(str(c))
+
+    self.__multiplycoeffs = multiplycoeffs = self.__findmultiplycoeffs(np.diag(F))
+    F = np.diag(np.diag(F) / multiplycoeffs)
+    c /= multiplycoeffs
+
+    logger.info("Multiplied variables to get coefficients closer to 1 for minimization.")
+    logger.info("F matrix:")
+    logger.info(str(np.diag(F)))
+    logger.info("linear coefficients:")
+    logger.info(str(c))
+
+    t = self.__t = cp.Variable()
+    #self.__tominimize = t + cp.matmul(c, x) #no need for + r
+    #self.__otherconstraints.append(cp.SOC(2*t, cp.matmul(F, x)))
+    self.__tominimize = 0.5 * cp.quad_form(x, F.T*F) + cp.matmul(c, x)
+    #===================================================================
+
+    self.__minimize = cp.Minimize(self.__tominimize)
+
+  def __findmultiplycoeffs(self, diagF, verbose=False):
+    monomials = self.monomials
+    polynomialvariables = sorted(sum(monomials, collections.Counter()).keys()) #including '1'
+
+    logdiagF = np.log(diagF)
+    logmultiplyvariables = collections.defaultdict(cp.Variable)
+
+    tominimize = 0
+    for monomial, logoneovercoeff in itertools.izip_longest(monomials, logdiagF):
+      tominimize += (logoneovercoeff + sum(logmultiplyvariables[variable] for variable in monomial.elements()))**2
+    minimize = cp.Minimize(tominimize)
+    prob = cp.Problem(minimize)
+    prob.solve(verbose=verbose)
+
+    logmultiplycoeffs = -np.array([sum(logmultiplyvariables[variable].value for variable in monomial.elements()) for monomial in monomials])
+    multiplycoeffs = np.exp(logmultiplycoeffs)
+
+    if verbose:
+      print {k: v.value for k, v in logmultiplyvariables.iteritems()}
+      print logdiagF
+      for i, logcoeff in enumerate(logmultiplycoeffs):
+        #subtract because diagF is proportional to 1/coeff
+        logdiagF[i] -= sum(logmultiplyvariables[variable].value for variable in monomial.elements())
+      print logdiagF
+      print diagF
+      print np.exp(logdiagF)
+
+    return multiplycoeffs
 
   def __del__(self):
     if self.__printlogaterror:
@@ -116,10 +169,15 @@ class CuttingPlaneMethodBase(object):
   def evalconstraint(self, potentialsolution):
     """
     Evaluates the potential solution to see if it satisfies the constraints.
-    Should return two things:
+    Should return an OptimizeResult that includes:
      - the minimum value of the polynomial that has to be always positive
      - the values of the monomials at that minimum
        e.g. for a 4D quartic, (1, x1, x2, x3, x4, x1^2, x1x2, ..., x4^4)
+    """
+  @abc.abstractproperty
+  def monomials(self):
+    """
+    Order of monomials in the polynomial, corresponding to the expected order of coefficients
     """
 
   def iterate(self):
@@ -161,7 +219,7 @@ class CuttingPlaneMethodBase(object):
     if minvalue >= 0:
       logger.info("Minimum of the constraint polynomial is %g --> finished successfully!", minvalue)
       self.__results = optimize.OptimizeResult(
-        x=x,
+        x=x / self.__multiplycoeffs,
         success=True,
         status=1,
         nit=len(self.__cuttingplanes)+1,
@@ -187,7 +245,7 @@ class CuttingPlaneMethodBase(object):
         logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[0] / oldx0 - 1, minvalue)
         logger.info("Approximate minimum of the target function is {} at {}".format(self.__tominimize.value - self.__funatminimum, x))
         self.__results = optimize.OptimizeResult(
-          x=x,
+          x=x / self.__multiplycoeffs,
           success=True,
           status=2,
           nit=len(self.__cuttingplanes)+1,
@@ -213,32 +271,40 @@ class CuttingPlaneMethodBase(object):
 
 class CuttingPlaneMethod1DQuadratic(CuttingPlaneMethodBase):
   xsize = 3
+  monomials = list(getpolynomialndmonomials(2, 1))
   evalconstraint = staticmethod(minimizequadratic)
 
 class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
   xsize = 5
+  monomials = list(getpolynomialndmonomials(4, 1))
   evalconstraint = staticmethod(minimizequartic)
 
 class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodBase):
   xsize = 15
+  monomials = list(getpolynomialndmonomials(2, 4))
   def evalconstraint(self, coeffs):
     return minimizepolynomialnd(2, 4, coeffs)
 
 class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodBase):
   xsize = 70
+  monomials = list(getpolynomialndmonomials(4, 4))
   def evalconstraint(self, coeffs):
     return minimizepolynomialnd(4, 4, coeffs)
 
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodBase):
   xsize = 65
   def insertzeroatindices():
-    for idx, (coeff, variables) in enumerate(getpolynomialndmonomials(4, 4, [1]*70)):
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
       if variables["z"] >= 3:
         yield idx
   insertzeroatindices = list(insertzeroatindices())
 
   useconstraintindices = range(70)
-  for _ in insertzeroatindices: useconstraintindices.remove(_)
+  monomials = list(getpolynomialndmonomials(4, 4))
+  for _ in sorted(insertzeroatindices, reverse=True):
+    assert useconstraintindices[_] == _
+    del useconstraintindices[_]
+    del monomials[_]
   del _
 
   def evalconstraint(self, coeffs):
