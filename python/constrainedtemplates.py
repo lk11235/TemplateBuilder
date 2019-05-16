@@ -94,7 +94,11 @@ class ConstrainedTemplatesBase(object):
       self.__logfile.write(thing+"\n")
 
   def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
-    if all(_.alreadyexists for _ in self.templates): return
+    if all(_.alreadyexists for _ in self.templates):
+      for _ in self.templates:
+        for component in _.templatecomponents:
+          component.lock()
+      return
     assert not any(_.alreadyexists for _ in self.templates)
 
     printbins = tuple(tuple(_) for _ in printbins)
