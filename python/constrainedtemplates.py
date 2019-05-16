@@ -361,7 +361,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   @abc.abstractproperty
   def pureindices(self): "can be a class member"
   @abc.abstractmethod
-  def cuttingplanefunction(self): "can be static"
+  def cuttingplanefunction(self, x0, sigma, maxfractionaladjustment): "can be static"
 
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
@@ -450,17 +450,31 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
 
   )
   pureindices = 0, 35, 55, 65, 69
-  cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic)
+  @classmethod
+  def cuttingplanefunction(cls, x0, sigma, *args, **kwargs):
+    if np.all(x0[cls.gZ3indices,:] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
+      x0withoutL1Zgprod = np.array([_ for i, _ in enumerate(x0) if i not in cls.gZ3indices])
+      sigmawithoutL1Zgprod = np.array([_ for i, _ in enumerate(sigma) if i not in cls.gZ3indices])
+
+      result = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutL1Zgprod, sigmawithoutL1Zgprod, *args, **kwargs)
+
+      x = iter(result.x)
+      result.x = np.array([0 if i in cls.gZ3indices else next(x) for i in xrange(len(x0))])
+      for remaining in x: assert False
+
+      result.message += "\n(using WWH function because there's no reweighted L1Zg in production)"
+
+      return result
+    else:
+      return cuttingplanemethod4dquartic(x0, sigma, *args, **kwargs)
+  gZ3indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _ or _ == "l")
 
 class FourParameterWWH(ConstrainedTemplatesWithFit):
-  gZ3indices = tuple(i for i, _ in enumerate(FourParameterVVH.templatenames) if "gl3" in _ or _ == "l")
   #https://stackoverflow.com/q/13905741/5228524
-  templatenames = (
-    lambda gZ3indices=gZ3indices:
-    tuple(name for i, name in enumerate(FourParameterVVH.templatenames) if i not in gZ3indices)
-  )()
-  pureindices = (
-    lambda gZ3indices=gZ3indices:
-    tuple(index - sum(1 for i in gZ3indices if i < index) for index in FourParameterVVH.pureindices if index not in gZ3indices)
-  )()
+  templatenames = tuple(name for i, name in enumerate(FourParameterVVH.templatenames) if i not in FourParameterVVH.gZ3indices)
+  pureindices = tuple(
+    index - sum(1 for i in FourParameterVVH.gZ3indices if i < index)
+    for index in FourParameterVVH.pureindices
+    if index not in FourParameterVVH.gZ3indices
+  )
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic)
