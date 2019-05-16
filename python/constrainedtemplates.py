@@ -462,7 +462,7 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
       result.x = np.array([0 if i in cls.gZ3indices else next(x) for i in xrange(len(x0))])
       for remaining in x: assert False
 
-      result.message += "\n(using WWH function because there's no reweighted L1Zg in production)"
+      result.message += " (using WWH function because there's no reweighted L1Zg in production)"
 
       return result
     else:
