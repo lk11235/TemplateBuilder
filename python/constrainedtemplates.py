@@ -94,6 +94,9 @@ class ConstrainedTemplatesBase(object):
       self.__logfile.write(thing+"\n")
 
   def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
+    if all(_.alreadyexists for _ in self.templates): return
+    assert not any(_.alreadyexists for _ in self.templates)
+
     printbins = tuple(tuple(_) for _ in printbins)
     assert all(len(_) == 3 for _ in printbins)
     self.write("Making the final templates:")

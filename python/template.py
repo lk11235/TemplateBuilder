@@ -45,9 +45,11 @@ class Template(object):
 
     hkey = self.__tdirectory.FindKey(name)
     if reuseifexists and hkey:
+      self.__alreadyexists = True
       self.__h = hkey.ReadObj()
       self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = True
     else:
+      self.__alreadyexists = False
       self.__h = ROOT.TH3F(
         name, name,
         xbins, xmin, xmax,
@@ -162,6 +164,10 @@ class Template(object):
   @property
   def finalized(self):
     return self.__finalized
+
+  @property
+  def alreadyexists(self):
+    return self.__alreadyexists
 
   @property
   def templatecomponents(self):
