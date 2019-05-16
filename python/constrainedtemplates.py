@@ -464,14 +464,14 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
         for x0ij, sigmaij in itertools.izip(x0[i], sigma[i])
       )
       for i in range(self.ntemplates)
-      if i in self.gZ3indices
+      if i in self.gZ3indices and i in self.pureindices
     ) / min(
       weightedaverage(
         ufloat(x0ij, sigmaij)
         for x0ij, sigmaij in itertools.izip(x0[i], sigma[i])
       )
       for i in range(self.ntemplates)
-      if i not in self.gZ3indices
+      if i not in self.gZ3indices and i in self.pureindices
     ) < 1e-3:
       return cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args, **kwargs)
 
