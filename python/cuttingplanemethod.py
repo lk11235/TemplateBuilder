@@ -12,7 +12,7 @@ logger = logging.getLogger("cuttingplanemethod")
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printlogaterror=True):
+  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printlogaterror=True, moreargsforevalconstraint=()):
     x0 = np.array(x0)
     sigma = np.array(sigma)
 
@@ -30,6 +30,7 @@ class CuttingPlaneMethodBase(object):
 
     self.__cuttingplanes = []
     self.__otherconstraints = []
+    self.__moreargsforevalconstraint = moreargsforevalconstraint
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
 
@@ -208,7 +209,7 @@ class CuttingPlaneMethodBase(object):
 
       #does it satisfy the constraints?
 
-      minimizepolynomial = self.evalconstraint(x)
+      minimizepolynomial = self.evalconstraint(x, *self.__moreargsforevalconstraint)
       minvalue = minimizepolynomial.fun
     except BaseException as e:
       if self.__printlogaterror:
@@ -331,6 +332,80 @@ def cuttingplanemethod4dquartic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableQuadratic(*args, **kwargs).run()
+
+class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingPlaneMethodBase):
+  z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
+  xsize = 5
+  assert len(z34indices) == xsize
+
+  useconstraintindices = range(70)
+  monomials = list(getpolynomialndmonomials(4, 4))
+  for _ in sorted(range(70), reverse=True):
+    if _ in z34indices: continue
+    assert useconstraintindices[_] == _
+    del useconstraintindices[_]
+    del monomials[_]
+  del _
+
+  def evalconstraint(self, coeffs, othercoeffs):
+    coeffs = iter(coeffs)
+    othercoeffs = iter(othercoeffs)
+    newcoeffs = np.array([next(coeffs) if i in self.z34indices else next(othercoeffs) for i in xrange(70)])
+    for remaining in coeffs: assert False
+    for remaining in othercoeffs: assert False
+    return minimizepolynomialnd(4, 4, newcoeffs)
+
+def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs):
+  z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
+
+  assert np.all(x0[z34indices] == 0)
+
+  x0withoutz34 = np.array([_ for i, _ in enumerate(x0) if i not in z34indices])
+  sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
+
+  result = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutz34, sigmawithoutz34, *args, **kwargs)
+
+  x = iter(result.x)
+  result.x = np.array([0 if i in z34indices else next(x) for i in xrange(len(x0))])
+  for remaining in x: assert False
+
+  result.message += " (4th variable is only quadratic)"
+
+  return result
+
+def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args, **kwargs):
+  z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
+
+  x0withoutz34 = np.array([_ for i, _ in enumerate(x0) if i not in z34indices])
+  sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
+  x0z34 = np.array([_ for i, _ in enumerate(x0) if i in z34indices])
+  sigmaz34 = np.array([_ for i, _ in enumerate(sigma) if i in z34indices])
+
+  result1 = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutz34, sigmawithoutz34, *args, **kwargs)
+  result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,))
+
+  result = optimize.OptimizeResult({
+    k+"_step1": v for k, v in result1.iteritems()
+  })
+  result.update({
+    k+"_step2": v for k, v in result2.iteritems()
+  })
+  x1 = iter(result1.x)
+  x2 = iter(result2.x)
+  result.x = np.array([next(x2) if i in z34indices else next(x1) for i in xrange(len(x0))])
+  for remaining in x1: assert False
+  for remaining in x2: assert False
+
+  result.message = "4th variable is small beyond quadratic, 2 steps.\nFirst: {}\nSecond: {}".format(result1.message, result2.message)
+  result.nit = result1.nit + result2.nit
+  result.maxcv = result1.maxcv + result2.maxcv
+  result.fun = result1.fun + result2.fun
+  result.status = max(result1.status, result2.status)
+
+  return result
+
+def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(*args, **kwargs).run()
 
 if __name__ == "__main__":
   logger.setLevel(logging.INFO)

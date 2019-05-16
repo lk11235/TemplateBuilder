@@ -7,7 +7,7 @@ from scipy import optimize
 from uncertainties import ufloat
 
 from moremath import kspoissongaussian, weightedaverage
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic
 
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
@@ -454,21 +454,27 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
 
   )
   pureindices = 0, 35, 55, 65, 69
-  @classmethod
-  def cuttingplanefunction(cls, x0, sigma, *args, **kwargs):
-    if np.all(x0[cls.gZ3indices,:] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
-      x0withoutL1Zgprod = np.array([_ for i, _ in enumerate(x0) if i not in cls.gZ3indices])
-      sigmawithoutL1Zgprod = np.array([_ for i, _ in enumerate(sigma) if i not in cls.gZ3indices])
+  def cuttingplanefunction(self, x0, sigma, *args, **kwargs):
+    if np.all(x0[self.gZ3indices,:] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
+      return cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs)
 
-      result = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutL1Zgprod, sigmawithoutL1Zgprod, *args, **kwargs)
+    elif max(
+      weightedaverage(
+        ufloat(x0ij, sigmaij)
+        for x0ij, sigmaij in itertools.izip(x0[i], sigma[i])
+      )
+      for i in range(self.ntemplates)
+      if i in self.gZ3indices
+    ) / min(
+      weightedaverage(
+        ufloat(x0ij, sigmaij)
+        for x0ij, sigmaij in itertools.izip(x0[i], sigma[i])
+      )
+      for i in range(self.ntemplates)
+      if i not in self.gZ3indices
+    ) < 1e-3:
+      return cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args, **kwargs)
 
-      x = iter(result.x)
-      result.x = np.array([0 if i in cls.gZ3indices else next(x) for i in xrange(len(x0))])
-      for remaining in x: assert False
-
-      result.message += " (using WWH function because there's no reweighted L1Zg in production)"
-
-      return result
     else:
       return cuttingplanemethod4dquartic(x0, sigma, *args, **kwargs)
   gZ3indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _ or _ == "l")
