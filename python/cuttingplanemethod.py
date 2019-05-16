@@ -82,19 +82,6 @@ class CuttingPlaneMethodBase(object):
       r += sum(x0column**2 / sigmacolumn**2)
     #we are minimizing 1/2 x^T Q x + c^T x + r, as in https://docs.mosek.com/modeling-cookbook/cqo.html#equation-eq-cqo-qcqo
 
-    #we now want to reformulate this into a conic.  relevant links:
-    #https://docs.mosek.com/whitepapers/qmodel.pdf
-    #https://docs.mosek.com/modeling-cookbook/cqo.html#quadratically-constrained-quadratic-optimization
-    #https://docs.mosek.com/modeling-cookbook/cqo.html#rotated-quadratic-cones
-    #https://www.cvxpy.org/examples/basic/socp.html
-    F = Q ** .5
-    np.testing.assert_allclose(np.matmul(F.T, F), Q)
-    #the benefits of reformulating are greatest if F is smaller than Q
-    #that's not the case here
-    #however, we also get the benefit of using smaller numbers
-    #the numbers in F are closer to 1 than the numbers in Q,
-    #so we reduce the spread in orders of magnitude by a factor of 2.
-
     #now we want to scale the coefficients to get numbers even closer to 1.
     #We could scale all the coefficients to have sigma=1.  This wouldn't help however,
     #because we would have to scale them back in order to evaluate the nd polynomial
@@ -107,25 +94,23 @@ class CuttingPlaneMethodBase(object):
     logger.info(str(x0))
     logger.info("sigma:")
     logger.info(str(sigma))
-    logger.info("F matrix:")
-    logger.info(str(np.diag(F)))
+    logger.info("Q matrix:")
+    logger.info(str(np.diag(Q)))
     logger.info("linear coefficients:")
     logger.info(str(c))
 
-    self.__multiplycoeffs = multiplycoeffs = self.__findmultiplycoeffs(np.diag(F))
-    F = np.diag(np.diag(F) / multiplycoeffs)
+    self.__multiplycoeffs = multiplycoeffs = self.__findmultiplycoeffs(np.diag(Q) ** .5)
+    Q = np.diag(np.diag(Q) / multiplycoeffs**2)
     c /= multiplycoeffs
 
     logger.info("Multiplied variables to get coefficients closer to 1 for minimization.")
-    logger.info("F matrix:")
-    logger.info(str(np.diag(F)))
+    logger.info("Q matrix:")
+    logger.info(str(np.diag(Q)))
     logger.info("linear coefficients:")
     logger.info(str(c))
 
     t = self.__t = cp.Variable()
-    #self.__tominimize = t + cp.matmul(c, x) #no need for + r
-    #self.__otherconstraints.append(cp.SOC(2*t, cp.matmul(F, x)))
-    self.__tominimize = 0.5 * cp.quad_form(x, F.T*F) + cp.matmul(c, x)
+    self.__tominimize = 0.5 * cp.quad_form(x, Q) + cp.matmul(c, x)
     #===================================================================
 
     self.__minimize = cp.Minimize(self.__tominimize)
