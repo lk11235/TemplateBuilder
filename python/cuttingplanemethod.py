@@ -115,9 +115,30 @@ class CuttingPlaneMethodBase(object):
 
     self.__minimize = cp.Minimize(self.__tominimize)
 
+    self.__otherconstraints += [
+      self.__x[i]>=0 for i in self.maxpowerindices
+    ]
+
+  @property
+  def polynomialvariables(self):
+    return sorted(sum(self.monomials, collections.Counter()).keys()) #including '1'
+
+  @property
+  def maxpowerindices(self):
+    maxpowers = {
+      varname: max(monomial[varname] for monomial in self.monomials)
+        for varname in self.polynomialvariables
+    }
+    for v, p in maxpowers.iteritems():
+      if p%2: raise ValueError("max power of {} is odd: {}".format(v, p))
+    result = []
+    for i, monomial in enumerate(self.monomials):
+      if any(monomial[v] == p for v, p in maxpowers.iteritems()):
+        result.append(i)
+    return result
+
   def __findmultiplycoeffs(self, diagF, verbose=False):
     monomials = self.monomials
-    polynomialvariables = sorted(sum(monomials, collections.Counter()).keys()) #including '1'
 
     logdiagF = np.log(diagF)
     logmultiplyvariables = collections.defaultdict(cp.Variable)
@@ -339,6 +360,21 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
     for remaining in coeffs: assert False
     for remaining in othercoeffs: assert False
     return minimizepolynomialnd(4, 4, newcoeffs)
+
+  @property
+  def maxpowerindices(self):
+    maxpowers = {
+      varname: max(monomial[varname] for monomial in self.monomials)
+        for varname in self.polynomialvariables
+        if varname == "z"
+    }
+    for v, p in maxpowers.iteritems():
+      if p%2: raise ValueError("max power of {} is odd: {}".format(v, p))
+    result = []
+    for i, monomial in enumerate(self.monomials):
+      if any(monomial[v] == p for v, p in maxpowers.iteritems()):
+        result.append(i)
+    return result
 
 def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
