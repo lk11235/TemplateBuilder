@@ -99,9 +99,14 @@ class CuttingPlaneMethodBase(object):
     logger.info("linear coefficients:")
     logger.info(str(c))
 
-    self.__multiplycoeffs = multiplycoeffs = self.__findmultiplycoeffs(np.diag(Q) ** .5)
+    multiplyvariables, multiplycoeffs = self.__findmultiplycoeffs(np.diag(Q) ** .5)
+    self.__multiplycoeffs = multiplycoeffs
     Q = np.diag(np.diag(Q) / multiplycoeffs**2)
     c /= multiplycoeffs
+
+    self.__multipliedargsforevalconstraint = tuple(
+      f(multiplyvariables, arg) for f, arg in itertools.izip(self.modifymoreargs(), self.__moreargsforevalconstraint)
+    )
 
     logger.info("Multiplied variables to get coefficients closer to 1 for minimization.")
     logger.info("Q matrix:")
@@ -122,6 +127,10 @@ class CuttingPlaneMethodBase(object):
   @property
   def polynomialvariables(self):
     return sorted(sum(self.monomials, collections.Counter()).keys()) #including '1'
+
+  @staticmethod
+  def modifymoreargs():
+    return ()
 
   @property
   def maxpowerindices(self):
@@ -151,6 +160,7 @@ class CuttingPlaneMethodBase(object):
     prob.solve(verbose=verbose)
 
     logmultiplycoeffs = -np.array([sum(logmultiplyvariables[variable].value for variable in monomial.elements()) for monomial in monomials])
+    multiplyvariables = {k: np.exp(v.value) for k, v in logmultiplyvariables.iteritems()}
     multiplycoeffs = np.exp(logmultiplycoeffs)
 
     if verbose:
@@ -163,7 +173,7 @@ class CuttingPlaneMethodBase(object):
       print diagF
       print np.exp(logdiagF)
 
-    return multiplycoeffs
+    return multiplyvariables, multiplycoeffs
 
   def __del__(self):
     if self.__printlogaterror:
@@ -346,11 +356,12 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
 
   useconstraintindices = range(70)
   monomials = list(getpolynomialndmonomials(4, 4))
+  unusedmonomials = []
   for _ in sorted(range(70), reverse=True):
     if _ in z34indices: continue
     assert useconstraintindices[_] == _
     del useconstraintindices[_]
-    del monomials[_]
+    unusedmonomials.insert(0, monomials.pop(_))
   del _
 
   def evalconstraint(self, coeffs, othercoeffs):
@@ -375,6 +386,13 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
       if any(monomial[v] == p for v, p in maxpowers.iteritems()):
         result.append(i)
     return result
+
+  @classmethod
+  def modifymoreargs(cls):
+    def modifyothercoeffs(multiplyvariables, othercoeffs):
+      multiplyothercoeffs = 1/np.array([np.prod([multiplyvariables[variable] for variable in monomial.elements()]) for monomial in cls.unusedmonomials])
+      return multiplyothercoeffs * othercoeffs
+    return modifyothercoeffs,
 
 def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
