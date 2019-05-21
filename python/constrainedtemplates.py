@@ -178,12 +178,15 @@ class ConstrainedTemplatesBase(object):
   def applymirrortoarray(self, array):
     if len(self.templates) != len(array):
       raise ValueError("array should have length {}".format(len(self.templates)))
-    return np.array([
-      {"symmetric": 1, "antisymmetric": -1}[t.mirrortype] * s
-         if t.scaleby != 0
-         else 0 * s
-      for t, s in itertools.izip(self.templates, array)
-    ])
+    try:
+      return np.array([
+        {"symmetric": 1, "antisymmetric": -1}[t.mirrortype] * s
+           if t.scaleby != 0
+           else 0 * s
+        for t, s in itertools.izip(self.templates, array)
+      ])
+    except KeyError:
+      raise ValueError("Not all templates have mirror: " + ", ".join(str(t.mirrortype) for t in self.templates))
 
   def findoutliers(self, bincontent, bincontentabs, debugprint=False):
     bincontent = bincontent.copy()
@@ -319,10 +322,10 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       ]
       fitprintmessage = "only one reweighted sample has events in this bin, using that directly"
     else:
-      mirroredx0 = self.applymirrortoarray(x0)
-
       cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
-      mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
+      if all(t.mirrortype for t in self.templates):
+        mirroredx0 = self.applymirrortoarray(x0)
+        mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
       try:
         if cachekey not in self.__fitresultscache:
           fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
