@@ -137,6 +137,8 @@ class ConstrainedTemplatesBase(object):
         printedbins.append(printmessage)
       if printallbins:
         self.write(printmessage)
+      else:
+        print("  {:3d} {:3d} {:3d}".format(x, y, z))
 
       if warning or printallbins:
         if isinstance(warning, basestring):
