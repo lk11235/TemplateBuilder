@@ -250,6 +250,12 @@ def getpolynomialndmonomials(d, n, coeffs=None, mirrorindices=()):
     else:
       yield coeff * np.prod(mirrors), ctr
 
+def getboundarymonomials(d, n, coeffs):
+  firstletter = getnvariableletters(n)[0]
+  for coeff, ctr in getpolynomialndmonomials(d, n, coeffs):
+    if ctr["1"]: continue
+    yield coeff, ctr
+
 def differentiatemonomial(coeffandxs, variable):
   coeff, xs = coeffandxs
   xs = collections.Counter(xs)
@@ -280,16 +286,54 @@ def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallpara
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
 def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
-  if not np.any(coeffs):
+  if not np.any(coeffs[1:]):
     return optimize.OptimizeResult(
-      x=np.array([0]),
+      x=np.array([0]*n),
       success=True,
       status=2,
-      message="polynomial is constant 0",
-      fun=0,
+      message="polynomial is constant",
+      fun=coeffs[0],
       linearconstraint=np.array([1 if i==0 else 0 for i in range(len(coeffs))])
     )
+
   polynomial = getpolynomialnd(d, n, coeffs)
+
+  #check the behavior around the sphere at infinity
+  boundarycoeffs, boundarymonomials = zip(*getboundarymonomials(d, n, coeffs))
+  boundaryresult = minimizepolynomialnd(d, n-1, boundarycoeffs, verbose=verbose, **kwargs)
+  if boundaryresult.fun < 0:
+    x = np.concatenate(([1], boundaryresult.x))
+    multiply = 1
+    while polynomial(x*multiply) > -1e6:
+      multiply *= 10
+      if multiply > 1e30: assert False
+
+    linearconstraint = []
+    monomials = getpolynomialndmonomials(d, n)
+    boundarylinearconstraint = iter(boundaryresult.linearconstraint)
+    boundarymonomials = iter(boundarymonomials)
+    nextboundarymonomial = next(boundarymonomials)
+
+    for monomial in monomials:
+      if monomial == nextboundarymonomial:
+        linearconstraint.append(next(boundarylinearconstraint))
+        nextboundarymonomial = next(boundarymonomials, None)
+      else:
+        linearconstraint.append(0)
+
+    for remaining in itertools.izip_longest(boundarylinearconstraint, boundarymonomials): assert False
+    assert nextboundarymonomial is None
+
+    return optimize.OptimizeResult(
+      x=x*multiply,
+      success=False,
+      status=3,
+      message="function goes to -infinity somewhere around the sphere at infinity",
+      fun=polynomial(x*multiply),
+      linearconstraint=np.array(linearconstraint),
+      boundaryresult=boundaryresult,
+    )
+
   criticalpoints = list(findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, **kwargs))
   minimum = float("inf")
   minimumx = None
@@ -305,11 +349,30 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     status=1,
     message="gradient is zero at {} real points".format(len(criticalpoints)),
     fun=minimum,
-    linearconstraint=getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
+    linearconstraint=getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx),
+    boundaryresult=boundaryresult,
   )
 
 if __name__ == "__main__":
-  a = [1, 1, -5, 0, 1]
-  print minimizepolynomialnd(4, 1, a, verbose=True)
-  print
-  print minimizequartic(a)
+  coeffs = np.array([
+    7.14562045e-06, -5.77999470e-07,  8.02158736e-06,  1.19417131e-05,
+    4.58641642e-06,  8.61578331e-07, -9.05128851e-07, -1.12497735e-06,
+   -6.14150255e-07,  1.39521049e-06,  5.74903386e-06,  1.76204796e-06,
+    5.17540756e-06,  2.32619519e-06,  1.94951576e-05
+  ])
+
+  for _ in getboundarymonomials(2, 4, coeffs): print _
+  matrix = np.array([
+    [coeffs[0],    coeffs[1] /2, coeffs[2] /2, coeffs[3] /2, coeffs[4] /2],
+    [coeffs[1] /2, coeffs[5],    coeffs[6] /2, coeffs[7] /2, coeffs[8] /2],
+    [coeffs[2] /2, coeffs[6] /2, coeffs[9],    coeffs[10]/2, coeffs[11]/2],
+    [coeffs[3] /2, coeffs[7] /2, coeffs[10]/2, coeffs[12],   coeffs[13]/2],
+    [coeffs[4] /2, coeffs[8] /2, coeffs[11]/2, coeffs[13]/2, coeffs[14]  ],
+  ])
+
+  assert np.all(matrix == matrix.T)
+
+  print np.linalg.eig(matrix)[0]
+  print np.linalg.eig(matrix)[1]
+
+  print minimizepolynomialnd(2, 4, coeffs)
