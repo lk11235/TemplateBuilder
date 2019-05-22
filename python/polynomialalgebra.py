@@ -353,6 +353,39 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     boundaryresult=boundaryresult,
   )
 
+def coeffswithpermutedvariables(d, n, coeffs, permutationdict):
+  xand1 = "1"+getnvariableletters(n)
+  monomialsandcoeffs = {frozenset(ctr.iteritems()): coeff for coeff, ctr in getpolynomialndmonomials(d, n, coeffs)}
+  for monomial in getpolynomialndmonomials(d, n):
+    newmonomial = collections.Counter(permutationdict[e] for e in monomial.elements())
+    newcoeff = monomialsandcoeffs[frozenset(newmonomial.iteritems())]
+    yield newcoeff
+
+def minimizepolynomialnd_permutations(d, n, coeffs, verbose=False, **kwargs):
+  xand1 = "1"+getnvariableletters(n)
+  bestresult = None
+  bestpermutationdict = None
+  for permutation in itertools.permutations(xand1):
+    permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
+    newcoeffs = np.array(list(coeffswithpermutedvariables(d, n, coeffs, permutationdict)))
+    newresult = minimizepolynomialnd(d, n, newcoeffs, verbose=False, **kwargs)
+    if (
+      bestresult is None
+      or len(np.nonzero(newresult.linearconstraint)) < len(np.nonzero(bestresult.linearconstraint))
+      or len(np.nonzero(newresult.linearconstraint)) == len(np.nonzero(bestresult.linearconstraint))
+         and sum(np.log(abs(newresult.linearconstraint[np.nonzero(newresult.linearconstraint)]))**2)
+           < sum(np.log(abs(bestresult.linearconstraint[np.nonzero(bestresult.linearconstraint)]))**2)
+    ):
+      bestresult = newresult
+      bestpermutationdict = permutationdict
+  reverse =  {v: k for k, v in bestpermutationdict.iteritems()}
+  return optimize.OptimizeResult(
+    permutation=bestpermutationdict,
+    permutedresult=bestresult,
+    fun=bestresult.fun,
+    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, bestresult.linearconstraint, bestpermutationdict))),
+  )
+
 if __name__ == "__main__":
   coeffs = np.array([
     7.14562045e-06, -5.77999470e-07,  8.02158736e-06,  1.19417131e-05,
@@ -375,4 +408,4 @@ if __name__ == "__main__":
   print np.linalg.eig(matrix)[0]
   print np.linalg.eig(matrix)[1]
 
-  print minimizepolynomialnd(2, 4, coeffs)
+  print minimizepolynomialnd_permutations(2, 4, coeffs)
