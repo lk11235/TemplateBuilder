@@ -128,7 +128,7 @@ def minimizequadratic(coeffs):
       linearconstraint=np.array([0, 0, 1]),
     )
 
-  x = linearformula([b, 2*c])
+  x = linearformula([b, 2*c])[0]
   fun = a + b*x + c*x**2
 
   return optimize.OptimizeResult(
@@ -286,6 +286,13 @@ def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallpara
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
 def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
+  if n == 1:
+    if d == 0: return minimizeconstant(coeffs)
+    if d == 1: return minimizelinear(coeffs)
+    if d == 2: return minimizequadratic(coeffs)
+    if d == 3: return minimizecubic(coeffs)
+    if d == 4: return minimizequartic(coeffs)
+
   if not np.any(coeffs[1:]):
     return optimize.OptimizeResult(
       x=np.array([0]*n),
@@ -384,6 +391,7 @@ def minimizepolynomialnd_permutations(d, n, coeffs, verbose=False, **kwargs):
     permutedresult=bestresult,
     fun=bestresult.fun,
     linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, bestresult.linearconstraint, bestpermutationdict))),
+    x=(bestresult.x, "permuted")
   )
 
 if __name__ == "__main__":

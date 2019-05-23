@@ -6,7 +6,7 @@ import numpy as np
 import cvxpy as cp
 from scipy import optimize
 
-from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizequadratic, minimizequartic
+from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
 
 logger = logging.getLogger("cuttingplanemethod")
 
@@ -300,19 +300,19 @@ class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodBase):
   xsize = 10
   monomials = list(getpolynomialndmonomials(2, 3))
   def evalconstraint(self, coeffs):
-    return minimizepolynomialnd(2, 3, coeffs)
+    return minimizepolynomialnd_permutations(2, 3, coeffs)
 
 class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodBase):
   xsize = 15
   monomials = list(getpolynomialndmonomials(2, 4))
   def evalconstraint(self, coeffs):
-    return minimizepolynomialnd(2, 4, coeffs)
+    return minimizepolynomialnd_permutations(2, 4, coeffs)
 
 class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodBase):
   xsize = 70
   monomials = list(getpolynomialndmonomials(4, 4))
   def evalconstraint(self, coeffs):
-    return minimizepolynomialnd(4, 4, coeffs)
+    return minimizepolynomialnd_permutations(4, 4, coeffs)
 
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodBase):
   xsize = 65
@@ -334,7 +334,7 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodBase):
     coeffs = iter(coeffs)
     newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
-    return minimizepolynomialnd(4, 4, newcoeffs)
+    return minimizepolynomialnd_permutations(4, 4, newcoeffs)
 
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
@@ -370,7 +370,7 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
     newcoeffs = np.array([next(coeffs) if i in self.z34indices else next(othercoeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
     for remaining in othercoeffs: assert False
-    return minimizepolynomialnd(4, 4, newcoeffs)
+    return minimizepolynomialnd_permutations(4, 4, newcoeffs)
 
   @property
   def maxpowerindices(self):
