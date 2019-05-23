@@ -6,7 +6,7 @@ import numpy as np
 import cvxpy as cp
 from scipy import optimize
 
-from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
+from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
 
 logger = logging.getLogger("cuttingplanemethod")
 
@@ -305,25 +305,42 @@ class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
   monomials = list(getpolynomialndmonomials(4, 1))
   evalconstraint = staticmethod(minimizequartic)
 
-class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodBase):
-  xsize = 10
-  monomials = list(getpolynomialndmonomials(2, 3))
-  def evalconstraint(self, coeffs):
-    return minimizepolynomialnd_permutations(2, 3, coeffs)
+class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
+  def __init__(self, *args, **kwargs):
+    self.__usepermutations = kwargs.pop("usepermutations", False)
+    super(CuttingPlaneMethodMultiDimensional, self).__init__(*args, **kwargs)
 
-class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodBase):
-  xsize = 15
-  monomials = list(getpolynomialndmonomials(2, 4))
-  def evalconstraint(self, coeffs):
-    return minimizepolynomialnd_permutations(2, 4, coeffs)
+  @property
+  def __minimizepolynomialfunction(self):
+    return minimizepolynomialnd_permutations if self.__usepermutations else minimizepolynomialnd
 
-class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodBase):
-  xsize = 70
-  monomials = list(getpolynomialndmonomials(4, 4))
+class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensional):
   def evalconstraint(self, coeffs):
-    return minimizepolynomialnd_permutations(4, 4, coeffs)
+    return self.__minimizepolynomialfunction(self.degree, self.nvariables, coeffs)
 
-class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodBase):
+  @abc.abstractproperty
+  def degree(self): "can be a class member"
+  @abc.abstractproperty
+  def nvariables(self): "can be a class member"
+
+  @property
+  def monomials(self): return list(getpolynomialndmonomials(self.degree, self.monomials))
+  @property
+  def xsize(self): return scipy.special.comb(self.nvariables+1, self.degree, repetition=True)
+
+class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
+  degree = 2
+  nvariables = 3
+
+class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
+  degree = 2
+  nvariables = 4
+
+class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodMultiDimensionalSimple):
+  degree = 4
+  nvariables = 4
+
+class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodMultiDimensional):
   xsize = 65
   def insertzeroatindices():
     for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
@@ -343,7 +360,7 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodBase):
     coeffs = iter(coeffs)
     newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
-    return minimizepolynomialnd_permutations(4, 4, newcoeffs)
+    return self.__minimizepolynomialfunction(4, 4, newcoeffs)
 
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
@@ -358,7 +375,7 @@ def cuttingplanemethod4dquartic(*args, **kwargs):
 def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableQuadratic(*args, **kwargs).run()
 
-class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingPlaneMethodBase):
+class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingPlaneMethodMultiDimensional):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
   xsize = 5
   assert len(z34indices) == xsize
@@ -379,7 +396,7 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
     newcoeffs = np.array([next(coeffs) if i in self.z34indices else next(othercoeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
     for remaining in othercoeffs: assert False
-    return minimizepolynomialnd_permutations(4, 4, newcoeffs)
+    return self.__minimizepolynomialfunction(4, 4, newcoeffs)
 
   @property
   def maxpowerindices(self):
