@@ -368,31 +368,45 @@ def coeffswithpermutedvariables(d, n, coeffs, permutationdict):
     newcoeff = monomialsandcoeffs[frozenset(newmonomial.iteritems())]
     yield newcoeff
 
-def minimizepolynomialnd_permutations(d, n, coeffs, verbose=False, **kwargs):
+def minimizepolynomialnd_permutations(d, n, coeffs, verbose=False, debugprint=False, **kwargs):
   xand1 = "1"+getnvariableletters(n)
-  bestresult = None
-  bestpermutationdict = None
+  best = None
   for permutation in itertools.permutations(xand1):
     permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
     newcoeffs = np.array(list(coeffswithpermutedvariables(d, n, coeffs, permutationdict)))
-    newresult = minimizepolynomialnd(d, n, newcoeffs, verbose=False, **kwargs)
-    if (
-      bestresult is None
-      or len(np.nonzero(newresult.linearconstraint)) < len(np.nonzero(bestresult.linearconstraint))
-      or len(np.nonzero(newresult.linearconstraint)) == len(np.nonzero(bestresult.linearconstraint))
-         and sum(np.log(abs(newresult.linearconstraint[np.nonzero(newresult.linearconstraint)]))**2)
-           < sum(np.log(abs(bestresult.linearconstraint[np.nonzero(bestresult.linearconstraint)]))**2)
-    ):
-      bestresult = newresult
-      bestpermutationdict = permutationdict
-  reverse =  {v: k for k, v in bestpermutationdict.iteritems()}
+    result = minimizepolynomialnd(d, n, newcoeffs, verbose=False, **kwargs)
+
+    #want this to be small
+    nonzerolinearconstraint = result.linearconstraint[np.nonzero(result.linearconstraint)]
+    figureofmerit = len(result.linearconstraint) - len(nonzerolinearconstraint), sum(np.log(abs(nonzerolinearconstraint))**2)
+
+    if debugprint:
+      print "---------------------------------"
+      print result.linearconstraint
+      print figureofmerit
+
+    if best is None or figureofmerit < best[3]:
+      best = permutation, permutationdict, result, figureofmerit
+      if debugprint: print "new best"
+
+    if debugprint: print "---------------------------------"
+
+    if result.fun > 0 or figureofmerit <= (0, 50):
+      break
+
+  permutation, permutationdict, result, figureofmerit = best
+
+  if list(permutation) == list(xand1): return result
+
+  reverse =  {v: k for k, v in permutationdict.iteritems()}
   return optimize.OptimizeResult(
-    permutation=bestpermutationdict,
-    permutedresult=bestresult,
-    fun=bestresult.fun,
-    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, bestresult.linearconstraint, bestpermutationdict))),
-    x=(bestresult.x, "permuted")
+    permutation=permutationdict,
+    permutedresult=result,
+    fun=result.fun,
+    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, permutationdict))),
+    x=(result.x, "permuted")
   )
+  return result
 
 if __name__ == "__main__":
   coeffs = np.array([
