@@ -12,7 +12,7 @@ logger = logging.getLogger("cuttingplanemethod")
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printlogaterror=True, moreargsforevalconstraint=()):
+  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printlogaterror=True, moreargsforevalconstraint=(), maxiter=float("inf")):
     x0 = np.array(x0)
     sigma = np.array(sigma)
 
@@ -45,6 +45,8 @@ class CuttingPlaneMethodBase(object):
       logger.setLevel(logging.INFO)
 
     self.__initminimization(x0, sigma)
+
+    self.__maxiter = maxiter
 
   def __initminimization(self, x0, sigma):
     x = self.__x = cp.Variable(self.xsize)
@@ -246,8 +248,15 @@ class CuttingPlaneMethodBase(object):
       )
       return
 
-    if -minvalue < x[0] * self.__maxfractionaladjustment:
+    if -minvalue < x[0] * self.__maxfractionaladjustment or len(self.__cuttingplanes)+1 >= self.maxiter:
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
+      if -minvalue > x[0] * self.__maxfractionaladjustment:
+        logger.info("Reached the max number of iterations %d", self.maxiter)
+        extramessage = "reached max number of iterations.  "
+        status = 3
+      else:
+        extramessage = ""
+        status = 2
 
       oldx0 = x[0]
       multiplier = 1
@@ -264,11 +273,11 @@ class CuttingPlaneMethodBase(object):
         self.__results = optimize.OptimizeResult(
           x=x / self.__multiplycoeffs,
           success=True,
-          status=2,
+          status=status,
           nit=len(self.__cuttingplanes)+1,
           maxcv=0,
-          message="multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
-          fun=self.__tominimize.value - self.__funatminimum
+          message=extramessage + "multiplied constant term by (1+{}) to get within constraint".format(x[0] / oldx0 - 1),
+          fun=minvalue - self.__funatminimum
         )
         return
 
