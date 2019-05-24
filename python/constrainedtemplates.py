@@ -328,10 +328,9 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
       try:
         if cachekey not in self.__fitresultscache:
-          fitresult = self.__fitresultscache[cachekey] = self.cuttingplanefunction(
+          fitresult = self.__fitresultscache[cachekey] = self.docuttingplanes(
             x0,
             sigma,
-            maxfractionaladjustment=1e-6,
           )
           if all(t.mirrortype for t in self.templates):
             self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
@@ -371,16 +370,34 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def pureindices(self): "can be a class member"
   @abc.abstractmethod
   def cuttingplanefunction(self, x0, sigma, maxfractionaladjustment): "can be static"
+  @abc.abstractproperty
+  def cuttingplanehaspermutations(self):
+    """
+    can be a class member
+    say if the cutting plane function has a usepermutations kwarg
+    """
+
+  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=100):
+    try:
+      result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
+      if self.cuttingplanehaspermutations and result.status == 3: raise Exception
+      return result
+    except Exception as e:
+      if self.cuttingplanehaspermutations:
+        return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
+      raise
 
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
   cuttingplanefunction = staticmethod(cuttingplanemethod1dquadratic)
+  cuttingplanehaspermutations = False
 
 class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
   pureindices = 0, 4
   cuttingplanefunction = staticmethod(cuttingplanemethod1dquartic)
+  cuttingplanehaspermutations = False
 
 class ThreeParameterggH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -391,6 +408,7 @@ class ThreeParameterggH(ConstrainedTemplatesWithFit):
   )
   pureindices = 0, 4, 7, 9
   cuttingplanefunction = staticmethod(cuttingplanemethod3dquadratic)
+  cuttingplanehaspermutations = True
 
 class FourParameterggH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -402,6 +420,7 @@ class FourParameterggH(ConstrainedTemplatesWithFit):
   )
   pureindices = 0, 5, 9, 12, 14
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquadratic)
+  cuttingplanehaspermutations = True
 
 class FourParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -483,6 +502,7 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
     else:
       return cuttingplanemethod4dquartic(x0, sigma, *args, **kwargs)
   gZ3indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _ or _ == "l")
+  cuttingplanehaspermutations = True
 
 class FourParameterWWH(ConstrainedTemplatesWithFit):
   #https://stackoverflow.com/q/13905741/5228524
@@ -493,3 +513,4 @@ class FourParameterWWH(ConstrainedTemplatesWithFit):
     if index not in FourParameterVVH.gZ3indices
   )
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic)
+  cuttingplanehaspermutations = True

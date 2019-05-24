@@ -4,7 +4,7 @@ import abc, collections, cStringIO, itertools, logging, sys
 
 import numpy as np
 import cvxpy as cp
-from scipy import optimize
+from scipy import optimize, special
 
 from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
 
@@ -248,10 +248,10 @@ class CuttingPlaneMethodBase(object):
       )
       return
 
-    if -minvalue < x[0] * self.__maxfractionaladjustment or len(self.__cuttingplanes)+1 >= self.maxiter:
+    if -minvalue < x[0] * self.__maxfractionaladjustment or len(self.__cuttingplanes)+1 >= self.__maxiter:
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
       if -minvalue > x[0] * self.__maxfractionaladjustment:
-        logger.info("Reached the max number of iterations %d", self.maxiter)
+        logger.info("Reached the max number of iterations %d", self.__maxiter)
         extramessage = "reached max number of iterations.  "
         status = 3
       else:
@@ -311,12 +311,12 @@ class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
     super(CuttingPlaneMethodMultiDimensional, self).__init__(*args, **kwargs)
 
   @property
-  def __minimizepolynomialfunction(self):
+  def minimizepolynomialfunction(self):
     return minimizepolynomialnd_permutations if self.__usepermutations else minimizepolynomialnd
 
 class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensional):
   def evalconstraint(self, coeffs):
-    return self.__minimizepolynomialfunction(self.degree, self.nvariables, coeffs)
+    return self.minimizepolynomialfunction(self.degree, self.nvariables, coeffs)
 
   @abc.abstractproperty
   def degree(self): "can be a class member"
@@ -324,9 +324,9 @@ class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensiona
   def nvariables(self): "can be a class member"
 
   @property
-  def monomials(self): return list(getpolynomialndmonomials(self.degree, self.monomials))
+  def monomials(self): return list(getpolynomialndmonomials(self.degree, self.nvariables))
   @property
-  def xsize(self): return scipy.special.comb(self.nvariables+1, self.degree, repetition=True)
+  def xsize(self): return special.comb(self.nvariables+1, self.degree, repetition=True, exact=True)
 
 class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
   degree = 2
@@ -360,7 +360,7 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodMultiDi
     coeffs = iter(coeffs)
     newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
-    return self.__minimizepolynomialfunction(4, 4, newcoeffs)
+    return self.minimizepolynomialfunction(4, 4, newcoeffs)
 
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
@@ -396,7 +396,7 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
     newcoeffs = np.array([next(coeffs) if i in self.z34indices else next(othercoeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
     for remaining in othercoeffs: assert False
-    return self.__minimizepolynomialfunction(4, 4, newcoeffs)
+    return self.minimizepolynomialfunction(4, 4, newcoeffs)
 
   @property
   def maxpowerindices(self):
