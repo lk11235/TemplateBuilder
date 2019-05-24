@@ -343,6 +343,9 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
             )
         fitresult = self.__fitresultscache[cachekey]
 
+        if fitresult.maxcv:
+          raise ValueError("Fit failed with constraint violation\n\n{}".format(fitresult))
+
       except BaseException as e:
         e.thingtoprint = thingtoprint
         raise
