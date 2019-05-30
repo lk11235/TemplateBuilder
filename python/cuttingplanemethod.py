@@ -183,10 +183,10 @@ class CuttingPlaneMethodBase(object):
 
   @abc.abstractproperty
   def xsize(self): "can just be a class member"
-  @abc.abstractproperty
-  def constantindex(self):
+  @abc.abstractmethod
+  def constantindex(self, minimizepolynomialresults):
     """
-    can be a class member
+    can be a static function
     index of the constant term of the polynomial
     or None if there isn't one
     """
@@ -255,7 +255,9 @@ class CuttingPlaneMethodBase(object):
       )
       return
 
-    if self.constantindex is None and len(self.__cuttingplanes)+1 >= self.__maxiter:
+    constantindex = self.constantindex(minimizepolynomial)
+
+    if constantindex is None and len(self.__cuttingplanes)+1 >= self.__maxiter:
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
       logger.info("Reached the max number of iterations %d", self.__maxiter)
       self.__results = optimize.OptimizeResult(
@@ -270,11 +272,11 @@ class CuttingPlaneMethodBase(object):
       return
 
     if (
-      self.constantindex is not None and -minvalue < x[self.constantindex] * self.__maxfractionaladjustment
+      constantindex is not None and -minvalue < x[constantindex] * self.__maxfractionaladjustment
       or len(self.__cuttingplanes)+1 >= self.__maxiter
     ):
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
-      if -minvalue > x[self.constantindex] * self.__maxfractionaladjustment:
+      if -minvalue > x[constantindex] * self.__maxfractionaladjustment:
         logger.info("Reached the max number of iterations %d", self.__maxiter)
         extramessage = "reached max number of iterations.  "
         status = 3
@@ -282,17 +284,26 @@ class CuttingPlaneMethodBase(object):
         extramessage = ""
         status = 2
 
-      oldconstant = x[self.constantindex]
+      oldconstant = x[constantindex]
       multiplier = 1
-      while minvalue < 0:
-        lastconstant = x[self.constantindex]
-        print x[self.constantindex], minvalue
-        x[self.constantindex] -= minvalue - multiplier*np.finfo(float).eps
-        if x[self.constantindex] == lastconstant: multiplier += 1
-        minvalue = self.evalconstraint(x).fun
+      evalconstraintkwargs = {}
+      if hasattr(minimizepolynomial, "permutation"):
+        evalconstraintkwargs["forcepermutation"] = minimizepolynomial.permutation
 
-      if x[self.constantindex] / oldconstant - 1 < self.__maxfractionaladjustment:
-        logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[self.constantindex] / oldconstant - 1, minvalue)
+      while minvalue < 0:
+        lastconstant = x[constantindex]
+        print minimizepolynomial
+        print x
+        print minimizepolynomial.permutation, constantindex, x[constantindex], minvalue
+        print
+        raw_input()
+        x[constantindex] -= minvalue - multiplier*np.finfo(float).eps
+        if x[constantindex] == lastconstant: multiplier += 1
+        minimizepolynomial = self.evalconstraint(x, **evalconstraintkwargs)
+        minvalue = minimizepolynomial.fun
+
+      if x[constantindex] / oldconstant - 1 < self.__maxfractionaladjustment:
+        logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[constantindex] / oldconstant - 1, minvalue)
         logger.info("Approximate minimum of the target function is {} at {}".format(self.__tominimize.value - self.__funatminimum, x))
         self.__results = optimize.OptimizeResult(
           x=x / self.__multiplycoeffs,
@@ -300,7 +311,7 @@ class CuttingPlaneMethodBase(object):
           status=status,
           nit=len(self.__cuttingplanes)+1,
           maxcv=0,
-          message=extramessage + "multiplied constant term by (1+{}) to get within constraint".format(x[self.constantindex] / oldconstant - 1),
+          message=extramessage + "multiplied constant term by (1+{}) to get within constraint".format(x[constantindex] / oldconstant - 1),
           fun=minvalue - self.__funatminimum
         )
         return
@@ -342,7 +353,14 @@ class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensiona
   def evalconstraint(self, coeffs):
     return self.minimizepolynomialfunction(self.degree, self.nvariables, coeffs)
 
-  constantindex = 0
+  def constantindex(self, minimizepolynomialresult):
+    permutation = minimizepolynomialresult.get("permutation", {"1": "1"})
+    for k, v in permutation.iteritems():
+      if v == "1": permutedtoconstant = k
+    for i, monomial in enumerate(self.monomials):
+      if set(monomial.keys()) == {permutedtoconstant}:
+        return i
+    assert False
 
   @abc.abstractproperty
   def degree(self): "can be a class member"
@@ -368,7 +386,15 @@ class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodMultiDimensionalSimple):
 
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodMultiDimensional):
   xsize = 65
-  constantindex = 0
+  def constantindex(self, minimizepolynomialresult):
+    permutation = minimizepolynomialresult.get("permutation", {"1": "1"})
+    for k, v in permutation.iteritems():
+      if v == "1": permutedtoconstant = k
+    for i, monomial in enumerate(self.monomials):
+      if set(monomial.keys()) == {permutedtoconstant}:
+        return i
+    assert permutedtoconstant == "z"
+    return None
   def insertzeroatindices():
     for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
       if variables["z"] >= 3:
@@ -405,7 +431,7 @@ def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
 class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingPlaneMethodMultiDimensional):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
   xsize = 5
-  constantindex = None
+  def constantindex(self, minimizepolynomialresult): return None
   assert len(z34indices) == xsize
 
   useconstraintindices = range(70)
