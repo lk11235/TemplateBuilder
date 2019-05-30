@@ -350,8 +350,8 @@ class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
     return minimizepolynomialnd_permutations if self.__usepermutations else minimizepolynomialnd
 
 class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensional):
-  def evalconstraint(self, coeffs):
-    return self.minimizepolynomialfunction(self.degree, self.nvariables, coeffs)
+  def evalconstraint(self, coeffs, **kwargs):
+    return self.minimizepolynomialfunction(self.degree, self.nvariables, coeffs, **kwargs)
 
   def constantindex(self, minimizepolynomialresult):
     permutation = minimizepolynomialresult.get("permutation", {"1": "1"})
@@ -409,11 +409,11 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodMultiDi
     del monomials[_]
   del _
 
-  def evalconstraint(self, coeffs):
+  def evalconstraint(self, coeffs, **kwargs):
     coeffs = iter(coeffs)
     newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
     for remaining in coeffs: assert False
-    return self.minimizepolynomialfunction(4, 4, newcoeffs)
+    return self.minimizepolynomialfunction(4, 4, newcoeffs, **kwargs)
 
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()

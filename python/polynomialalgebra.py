@@ -368,13 +368,27 @@ def coeffswithpermutedvariables(d, n, coeffs, permutationdict):
     newcoeff = monomialsandcoeffs[frozenset(newmonomial.iteritems())]
     yield newcoeff
 
-def minimizepolynomialnd_permutations(d, n, coeffs, verbose=False, debugprint=False, **kwargs):
+def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
+  newcoeffs = np.array(list(coeffswithpermutedvariables(d, n, coeffs, permutationdict)))
+  result = minimizepolynomialnd(d, n, newcoeffs, **kwargs)
+
+  reverse = {v: k for k, v in permutationdict.iteritems()}
+  if reverse == permutationdict: return result
+
+  return optimize.OptimizeResult(
+    permutation=permutationdict,
+    permutedresult=result,
+    fun=result.fun,
+    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, permutationdict))),
+    x=(result.x, "permuted")
+  )
+
+def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
   xand1 = "1"+getnvariableletters(n)
   best = None
   for permutation in itertools.permutations(xand1):
     permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
-    newcoeffs = np.array(list(coeffswithpermutedvariables(d, n, coeffs, permutationdict)))
-    result = minimizepolynomialnd(d, n, newcoeffs, verbose=False, **kwargs)
+    result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
 
     #want this to be small
     nonzerolinearconstraint = result.linearconstraint[np.nonzero(result.linearconstraint)]
@@ -396,16 +410,6 @@ def minimizepolynomialnd_permutations(d, n, coeffs, verbose=False, debugprint=Fa
 
   permutation, permutationdict, result, figureofmerit = best
 
-  if list(permutation) == list(xand1): return result
-
-  reverse =  {v: k for k, v in permutationdict.iteritems()}
-  return optimize.OptimizeResult(
-    permutation=permutationdict,
-    permutedresult=result,
-    fun=result.fun,
-    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, permutationdict))),
-    x=(result.x, "permuted")
-  )
   return result
 
 if __name__ == "__main__":
