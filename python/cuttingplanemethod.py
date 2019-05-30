@@ -288,7 +288,7 @@ class CuttingPlaneMethodBase(object):
       multiplier = 1
       evalconstraintkwargs = {}
       if hasattr(minimizepolynomial, "permutation"):
-        evalconstraintkwargs["forcepermutation"] = minimizepolynomial.permutation
+        evalconstraintkwargs["permutationdict"] = minimizepolynomial.permutation
 
       while minvalue < 0:
         lastconstant = x[constantindex]
@@ -345,9 +345,14 @@ class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
     self.__usepermutations = kwargs.pop("usepermutations", False)
     super(CuttingPlaneMethodMultiDimensional, self).__init__(*args, **kwargs)
 
-  @property
-  def minimizepolynomialfunction(self):
-    return minimizepolynomialnd_permutations if self.__usepermutations else minimizepolynomialnd
+  def minimizepolynomialfunction(self, *args, **kwargs):
+    if "permutationdict" in kwargs:
+        function = minimizepolynomialnd_permutation
+    elif self.__usepermutations:
+        function = minimizepolynomialnd_permutations
+    else:
+        function = minimizepolynomialnd
+    return function(*args, **kwargs)
 
 class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensional):
   def evalconstraint(self, coeffs, **kwargs):
