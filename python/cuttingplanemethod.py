@@ -8,6 +8,7 @@ from scipy import optimize, special
 
 from optimizeresult import OptimizeResult
 from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
+from rotatedconicconstraint import RQC
 
 logger = logging.getLogger("cuttingplanemethod")
 
@@ -30,7 +31,7 @@ class CuttingPlaneMethodBase(object):
       raise ValueError("len(sigma) should be {}, is actually {}".format(self.xsize, len(sigma)))
 
     self.__cuttingplanes = []
-    self.__otherconstraints = []
+    self.otherconstraints = []
     self.__moreargsforevalconstraint = moreargsforevalconstraint
     self.__results = None
     self.__maxfractionaladjustment = maxfractionaladjustment
@@ -123,7 +124,7 @@ class CuttingPlaneMethodBase(object):
 
     self.__minimize = cp.Minimize(self.__tominimize)
 
-    self.__otherconstraints += [
+    self.otherconstraints += [
       self.__x[i]>=0 for i in self.maxpowerindices
     ]
 
@@ -207,6 +208,9 @@ class CuttingPlaneMethodBase(object):
     Order of monomials in the polynomial, corresponding to the expected order of coefficients
     """
 
+  @property
+  def x(self): return self.__x
+
   def iterate(self):
     if self.__results is not None:
       raise RuntimeError("Can't iterate, already finished")
@@ -218,7 +222,7 @@ class CuttingPlaneMethodBase(object):
 
     prob = cp.Problem(
       self.__minimize,
-      self.__otherconstraints + self.__cuttingplanes,
+      self.otherconstraints + self.__cuttingplanes,
     )
 
     solvekwargs = {
@@ -331,10 +335,38 @@ class CuttingPlaneMethodBase(object):
     while not self.__results: self.iterate(*args, **kwargs)
     return self.__results
 
-class CuttingPlaneMethod1DQuadratic(CuttingPlaneMethodBase):
+class CuttingPlaneMethodNDQuadratic(CuttingPlaneMethodBase):
+  def __init__(self, *args, **kwargs):
+    super(CuttingPlaneMethodNDQuadratic, self).__init__(*args, **kwargs)
+    self.otherconstraints.append(self.__quadraticconstraint)
+  @property
+  def __quadraticconstraint(self):
+    monomials = self.monomials
+    letters = sorted(set.union(*(set(_.keys()) for _ in monomials)))
+    result = []
+    for v1, v2 in itertools.combinations(letters, 2):
+      #a v1^2 + b v1v2 + c v2^2 >= 0 always
+      # ==> 4ac - b^2 >= 0
+
+      v1v1index = self.monomials.index(collections.Counter([v1, v1]))
+      v1v2index = self.monomials.index(collections.Counter([v1, v2]))
+      v2v2index = self.monomials.index(collections.Counter([v2, v2]))
+
+#      t.append(2**.5 * self.x[[v1v1index,v2v2index]])
+#      X.append(self.x[[v1v2index]])
+      t = 2**.5 * self.x[[v1v1index,v2v2index]]
+      X = self.x[[v1v2index]]
+
+    print t
+    print X
+
+    return RQC(t, X, axis=1)
+
+class CuttingPlaneMethod1DQuadratic(CuttingPlaneMethodNDQuadratic):
   xsize = 3
   monomials = list(getpolynomialndmonomials(2, 1))
   evalconstraint = staticmethod(minimizequadratic)
+  constantindex = 0
 
 class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
   xsize = 5
@@ -378,11 +410,11 @@ class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensiona
   @property
   def xsize(self): return special.comb(self.nvariables+1, self.degree, repetition=True, exact=True)
 
-class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
+class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple, CuttingPlaneMethodNDQuadratic):
   degree = 2
   nvariables = 3
 
-class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
+class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodMultiDimensionalSimple, CuttingPlaneMethodNDQuadratic):
   degree = 2
   nvariables = 4
 
@@ -535,9 +567,9 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(*args, **k
 if __name__ == "__main__":
   logger.setLevel(logging.INFO)
   logger.addHandler(logging.StreamHandler(sys.stdout))
-  a = np.array([[1, 2.]]*70)
+  a = np.array([[1, 2.]]*3)
   a[2,:] *= -1
-  print CuttingPlaneMethod4DQuartic(
+  print CuttingPlaneMethod1DQuadratic(
     a,
     abs(a),
     maxfractionaladjustment=1e-6,
