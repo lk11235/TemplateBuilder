@@ -6,9 +6,9 @@ import numpy as np
 from scipy import optimize
 from uncertainties import ufloat
 
-from moremath import kspoissongaussian, weightedaverage
 from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic
-
+from moremath import kspoissongaussian, weightedaverage
+from optimizeresult import OptimizeResult
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
   return {
@@ -333,7 +333,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
             sigma,
           )
           if all(t.mirrortype for t in self.templates):
-            self.__fitresultscache[mirroredcachekey] = optimize.OptimizeResult(
+            self.__fitresultscache[mirroredcachekey] = OptimizeResult(
               x=self.applymirrortoarray(fitresult.x),
               fun=fitresult.fun,
               message="(mirrored) "+fitresult.message,

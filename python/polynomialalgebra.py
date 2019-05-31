@@ -20,10 +20,10 @@ import itertools
 import subprocess
 
 import numpy as np
-import scipy.optimize as optimize
 
 import hom4pswrapper
 from moremath import notnan
+from optimizeresult import OptimizeResult
 
 @notnan
 def linearformula(coeffs):
@@ -72,7 +72,7 @@ def minimizeconstant(coeffs):
   minimize y=a
   """
   a, = coeffs
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     x=np.array([0]),
     success=True,
     status=2,
@@ -94,7 +94,7 @@ def minimizelinear(coeffs):
   x = linearformula((a+2e6, b))[0]
   fun = a + b*x
   assert fun < -1e6
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     x=np.array([x]),
     success=False,
     status=3,
@@ -119,7 +119,7 @@ def minimizequadratic(coeffs):
     x = np.real(x)
     fun = a + b*x + c*x**2
     assert fun < -1e6
-    return optimize.OptimizeResult(
+    return OptimizeResult(
       x=np.array([x]),
       success=False,
       status=3,
@@ -131,7 +131,7 @@ def minimizequadratic(coeffs):
   x = linearformula([b, 2*c])[0]
   fun = a + b*x + c*x**2
 
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     x=np.array([x]),
     success=True,
     status=1,
@@ -154,7 +154,7 @@ def minimizecubic(coeffs):
   x = np.real(x)
   fun = a + b*x + c*x**2 + d*x**3
   assert fun < -1e6
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     x=np.array([x]),
     success=False,
     status=3,
@@ -182,7 +182,7 @@ def minimizequartic(coeffs):
     while fun > -1e6:
       x *= 10
       fun = a + b*x + c*x**2 + d*x**3 + e*x**4
-    return optimize.OptimizeResult(
+    return OptimizeResult(
       x=np.array([x]),
       success=False,
       status=3,
@@ -203,7 +203,7 @@ def minimizequartic(coeffs):
       x = flatpoint
   if np.isnan(minimum) or x is None: assert False, (coeffs, x, minimum)
 
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     x=np.array([x]),
     success=True,
     status=1,
@@ -294,7 +294,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     if d == 4: return minimizequartic(coeffs)
 
   if not np.any(coeffs[1:]):
-    return optimize.OptimizeResult(
+    return OptimizeResult(
       x=np.array([0]*n),
       success=True,
       status=2,
@@ -331,7 +331,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     for remaining in itertools.izip_longest(boundarylinearconstraint, boundarymonomials): assert False
     assert nextboundarymonomial is None
 
-    return optimize.OptimizeResult(
+    return OptimizeResult(
       x=x*multiply,
       success=False,
       status=3,
@@ -350,7 +350,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     if value < minimum:
       minimum = value
       minimumx = cp
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     x=np.array(minimumx),
     success=True,
     status=1,
@@ -375,7 +375,7 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
   reverse = {v: k for k, v in permutationdict.iteritems()}
   if reverse == permutationdict: return result
 
-  return optimize.OptimizeResult(
+  return OptimizeResult(
     permutation=permutationdict,
     permutedresult=result,
     fun=result.fun,

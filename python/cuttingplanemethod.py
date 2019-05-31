@@ -6,6 +6,7 @@ import numpy as np
 import cvxpy as cp
 from scipy import optimize, special
 
+from optimizeresult import OptimizeResult
 from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
 
 logger = logging.getLogger("cuttingplanemethod")
@@ -244,7 +245,7 @@ class CuttingPlaneMethodBase(object):
 
     if minvalue >= 0:
       logger.info("Minimum of the constraint polynomial is %g --> finished successfully!", minvalue)
-      self.__results = optimize.OptimizeResult(
+      self.__results = OptimizeResult(
         x=x / self.__multiplycoeffs,
         success=True,
         status=1,
@@ -260,7 +261,7 @@ class CuttingPlaneMethodBase(object):
     if constantindex is None and len(self.__cuttingplanes)+1 >= self.__maxiter:
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
       logger.info("Reached the max number of iterations %d", self.__maxiter)
-      self.__results = optimize.OptimizeResult(
+      self.__results = OptimizeResult(
         x=x / self.__multiplycoeffs,
         success=True,
         status=4,
@@ -305,7 +306,7 @@ class CuttingPlaneMethodBase(object):
       if x[constantindex] / oldconstant - 1 < self.__maxfractionaladjustment:
         logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[constantindex] / oldconstant - 1, minvalue)
         logger.info("Approximate minimum of the target function is {} at {}".format(self.__tominimize.value - self.__funatminimum, x))
-        self.__results = optimize.OptimizeResult(
+        self.__results = OptimizeResult(
           x=x / self.__multiplycoeffs,
           success=True,
           status=status,
@@ -508,7 +509,7 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args
   result1 = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutz34, sigmawithoutz34, *args, **kwargs)
   result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,))
 
-  result = optimize.OptimizeResult({
+  result = OptimizeResult({
     k+"_step1": v for k, v in result1.iteritems()
   })
   result.update({
