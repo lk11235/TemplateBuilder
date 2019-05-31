@@ -6,7 +6,7 @@ import numpy as np
 import cvxpy as cp
 from scipy import optimize, special
 
-from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
+from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
 
 logger = logging.getLogger("cuttingplanemethod")
 
