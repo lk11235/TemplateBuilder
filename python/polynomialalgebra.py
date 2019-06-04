@@ -148,7 +148,7 @@ def minimizecubic(coeffs):
   if d == 0:
     result = minimizequadratic(coeffs[:-1])
     x = result.x[0]
-    result.linearconstraint = np.concatenate(result.linearconstraint, [0])
+    result.linearconstraint = np.concatenate((result.linearconstraint, [0]))
     return result
   x = [_ for _ in cubicformula((a+2e6, b, c, d)) if abs(np.imag(_)) < 1e-12][0]
   x = np.real(x)
@@ -174,7 +174,7 @@ def minimizequartic(coeffs):
     if result.linearconstraint[-1]:
       result.linearconstraint = np.array([0, 0, 0, 0, 1])
     else:
-      result.linearconstraint = np.concatenate(result.linearconstraint, [0])
+      result.linearconstraint = np.concatenate((result.linearconstraint, [0]))
     return result
   if e < 0:
     x = 1
