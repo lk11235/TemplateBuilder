@@ -380,7 +380,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     say if the cutting plane function has a usepermutations kwarg
     """
 
-  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=100):
+  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=None):
+    if maxiter is None: maxiter = self.defaultmaxiter
     try:
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
       if self.cuttingplanehaspermutations and result.status >= 3: raise Exception
@@ -390,11 +391,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
       raise
 
+  defaultmaxiter = 100
+
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
   cuttingplanefunction = staticmethod(cuttingplanemethod1dquadratic)
   cuttingplanehaspermutations = False
+  defaultmaxiter = 500
 
 class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
@@ -412,6 +416,7 @@ class ThreeParameterggH(ConstrainedTemplatesWithFit):
   pureindices = 0, 4, 7, 9
   cuttingplanefunction = staticmethod(cuttingplanemethod3dquadratic)
   cuttingplanehaspermutations = True
+  defaultmaxiter = 500
 
 class FourParameterggH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -424,6 +429,7 @@ class FourParameterggH(ConstrainedTemplatesWithFit):
   pureindices = 0, 5, 9, 12, 14
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquadratic)
   cuttingplanehaspermutations = True
+  defaultmaxiter = 500
 
 class FourParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = (
