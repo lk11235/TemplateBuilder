@@ -263,17 +263,47 @@ def differentiatemonomial(coeffandxs, variable):
   if coeff: xs[variable] -= 1
   return coeff, xs
 
-def getpolynomialndgradientstrings(d, n, coeffs):
+def getpolynomialndgradient(d, n, coeffs):
   monomials = tuple(getpolynomialndmonomials(d, n, coeffs))
   derivatives = [[] for _ in xrange(n)]
   variablesandderivatives = zip(getnvariableletters(n), derivatives)
   for coeffandxs in monomials:
     for variable, derivative in variablesandderivatives:
       coeff, xs = differentiatemonomial(coeffandxs, variable)
-      if coeff: derivative.append("*".join(itertools.chain((repr(coeff),), xs.elements())))
-  return [" + ".join(_) + ";" for _ in derivatives]
+      if coeff: derivative.append((coeff, xs))
+  return derivatives
 
-def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False):
+def getpolynomialndgradientstrings(d, n, coeffs):
+  return [
+    " + ".join(
+      "*".join(
+        itertools.chain(
+          (repr(coeff),), xs.elements()
+        )
+      ) for coeff, xs in derivative
+    ) + ";" for derivative in getpolynomialndgradient(d, n, coeffs)
+  ]
+
+def findcriticalpointsquadraticnd(n, coeffs):
+  gradient = getpolynomialndgradient(2, n, coeffs)
+  variableletters = getnvariableletters(n)
+  #Ax=b
+  A = np.zeros((n, n))
+  b = np.zeros((n, 1))
+  for derivative, row, constant in itertools.izip_longest(gradient, A, b):
+    for coeff, xs in derivative:
+      xs = list(xs.elements())
+      assert len(xs) <= 1
+      if not xs or xs[0] == "1":
+        constant[0] = -coeff  #note - sign here!  Because the gradient should be Ax + (-b)
+      else:
+        row[variableletters.index(xs[0])] = coeff
+  return np.linalg.solve(A, b).T
+
+def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False, usespecialcases=True):
+  if usespecialcases and d == 2:
+    for _ in findcriticalpointsquadraticnd(n, coeffs): yield _
+    return
   p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
   if verbose: print stdin
@@ -420,18 +450,6 @@ if __name__ == "__main__":
     5.17540756e-06,  2.32619519e-06,  1.94951576e-05
   ])
 
-  for _ in getboundarymonomials(2, 4, coeffs): print _
-  matrix = np.array([
-    [coeffs[0],    coeffs[1] /2, coeffs[2] /2, coeffs[3] /2, coeffs[4] /2],
-    [coeffs[1] /2, coeffs[5],    coeffs[6] /2, coeffs[7] /2, coeffs[8] /2],
-    [coeffs[2] /2, coeffs[6] /2, coeffs[9],    coeffs[10]/2, coeffs[11]/2],
-    [coeffs[3] /2, coeffs[7] /2, coeffs[10]/2, coeffs[12],   coeffs[13]/2],
-    [coeffs[4] /2, coeffs[8] /2, coeffs[11]/2, coeffs[13]/2, coeffs[14]  ],
-  ])
-
-  assert np.all(matrix == matrix.T)
-
-  print np.linalg.eig(matrix)[0]
-  print np.linalg.eig(matrix)[1]
-
-  print minimizepolynomialnd_permutations(2, 4, coeffs)
+  print np.array(list(findcriticalpointspolynomialnd(2, 4, coeffs)))
+  print np.array(list(findcriticalpointspolynomialnd(2, 4, coeffs, usespecialcases=False)))
+  print findcriticalpointsquadraticnd(4, coeffs)
