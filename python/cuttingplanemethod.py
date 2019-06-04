@@ -244,7 +244,7 @@ class CuttingPlaneMethodBase(object):
       minimizepolynomial = self.evalconstraint(x, *self.__moreargsforevalconstraint)
       minvalue = minimizepolynomial.fun
     except BaseException as e:
-      if self.__printlogaterror:
+      if self.__printlogaterror and not self.__printaswego:
         print self.__logstream.getvalue()
       prob.solve(verbose=True, **solvekwargs)
       raise

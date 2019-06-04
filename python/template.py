@@ -137,7 +137,7 @@ class Template(object):
     if floor.nominal_value <= 0:
       raise ValueError("Invalid floor {}: has to be positive.".format(floor.nominal_value))
 
-    if floor.std_dev == 0:
+    if floor.std_dev == 0 and any(self.__h.GetBinContent(x, y, z) for x, y, z in self.binsxyz):
       #use this procedure to estimate the error for floored bins
       maxerrorratio, errortoset = max(
         (self.__h.GetBinError(x, y, z) / self.__h.GetBinContent(x, y, z), self.__h.GetBinError(x, y, z))
