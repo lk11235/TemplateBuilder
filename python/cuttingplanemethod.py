@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import abc, collections, cStringIO, itertools, logging, sys
+import abc, collections, cStringIO, itertools, logging, sys, warnings
 
 import numpy as np
 import cvxpy as cp
@@ -225,7 +225,9 @@ class CuttingPlaneMethodBase(object):
       "solver": cp.GUROBI,
     }
     try:
-      prob.solve(**solvekwargs)
+      with warnings.catch_warnings():
+        warnings.simplefilter("ignore", PendingDeprecationWarning)
+        prob.solve(**solvekwargs)
       x = self.__x.value
 
       if self.__reportdeltafun and not self.__cuttingplanes:
@@ -258,7 +260,10 @@ class CuttingPlaneMethodBase(object):
 
     constantindex = self.constantindex(minimizepolynomial)
 
-    if constantindex is None and len(self.__cuttingplanes)+1 >= self.__maxiter:
+    if (
+      len(self.__cuttingplanes)+1 >= self.__maxiter
+      #and constantindex is None
+    ):
       logger.info("Minimum of the constraint polynomial is %g", minvalue)
       logger.info("Reached the max number of iterations %d", self.__maxiter)
       self.__results = OptimizeResult(
