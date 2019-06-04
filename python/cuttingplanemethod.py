@@ -222,7 +222,7 @@ class CuttingPlaneMethodBase(object):
     )
 
     solvekwargs = {
-      "solver": cp.MOSEK,
+      "solver": cp.GUROBI,
     }
     try:
       prob.solve(**solvekwargs)
@@ -295,7 +295,7 @@ class CuttingPlaneMethodBase(object):
         lastconstant = x[constantindex]
         print minimizepolynomial
         print x
-        print minimizepolynomial.permutation, constantindex, x[constantindex], minvalue
+        print minimizepolynomial.get("permutation", None), constantindex, x[constantindex], minvalue
         print
         raw_input()
         x[constantindex] -= minvalue - multiplier*np.finfo(float).eps
