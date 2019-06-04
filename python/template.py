@@ -47,7 +47,7 @@ class Template(object):
     if reuseifexists and hkey:
       self.__alreadyexists = True
       self.__h = hkey.ReadObj()
-      self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = True
+      self.__finalized = self.__didscale = self.__didcheckmirror = self.__didfloor = True
     else:
       self.__alreadyexists = False
       self.__h = ROOT.TH3F(
@@ -59,7 +59,7 @@ class Template(object):
 
       self.__h.SetDirectory(0)
 
-      self.__finalized = self.__didscale = self.__dicheckmirror = self.__didfloor = False
+      self.__finalized = self.__didscale = self.__didcheckmirror = self.__didfloor = False
 
     subdirectories = [
       tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1]
@@ -120,8 +120,8 @@ class Template(object):
     self.__didscale = True
 
   def checkmirror(self):
-    if self.__dicheckmirror: raise RuntimeError("Trying to mirror twice!")
-    self.__dicheckmirror = True
+    if self.__didcheckmirror: raise RuntimeError("Trying to mirror twice!")
+    self.__didcheckmirror = True
     if self.__mirrortype is None: return
     sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
     for x, y, z in self.binsxyz:
@@ -155,6 +155,10 @@ class Template(object):
         self.__h.SetBinError(x, y, z, floor.std_dev)
 
   def finalize(self):
+    if self.__finalized:
+      assert self.__didscale
+      assert self.__didfloor
+      assert self.__didcheckmirror
     self.doscale()
     self.dofloor()
     self.__finalized = True
