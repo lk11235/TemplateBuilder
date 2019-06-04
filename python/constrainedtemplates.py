@@ -383,7 +383,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=100):
     try:
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
-      if self.cuttingplanehaspermutations and result.status == 3: raise Exception
+      if self.cuttingplanehaspermutations and result.status >= 3: raise Exception
       return result
     except Exception as e:
       if self.cuttingplanehaspermutations:
