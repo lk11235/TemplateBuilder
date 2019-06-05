@@ -351,6 +351,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
 
   #check the behavior around the sphere at infinity
   boundarycoeffs, boundarymonomials = zip(*getboundarymonomials(d, n, coeffs))
+  boundarycoeffs = np.array(boundarycoeffs)
   boundaryresult = minimizepolynomialnd(d, n-1, boundarycoeffs, verbose=verbose, **kwargs)
   if boundaryresult.fun < 0:
     x = np.concatenate(([1], boundaryresult.x))
