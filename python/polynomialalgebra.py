@@ -409,7 +409,7 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
     permutation=permutationdict,
     permutedresult=result,
     fun=result.fun,
-    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, permutationdict))),
+    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, reverse))),
     x=(result.x, "permuted")
   )
 
