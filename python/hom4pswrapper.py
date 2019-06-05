@@ -1,4 +1,4 @@
-import multiprocessing
+import contextlib, multiprocessing, os, re, subprocess
 
 nproc = multiprocessing.cpu_count()
 
@@ -43,3 +43,51 @@ def smallparalleltdegnopostcmdline():
 def easycmdline():
   return getcommandline(mprec=140, threads="CPU", pre=["bouncer", "balance", "const"], post=["pop", "pop", "refine-mp", "summary"], summarydigits=32)
 
+def getcmdline(which):
+  return {
+    "small": smallcmdline,
+    "fast": fastcmdline,
+    "smallparallel": smallparallelcmdline,
+    "smallparalleltdeg": smallparallelcmdline,
+    "smallparalleltdegnopost": smallparalleltdegnopostcmdline,
+    "easy": easycmdline,
+  }[which]()
+
+class Hom4PSRuntimeError(RuntimeError): pass
+class Hom4PSFailedPathsError(Hom4PSRuntimeError): pass
+
+@contextlib.contextmanager
+def setenv(name, value):
+  oldvalue = os.environ.get(name, None)
+  os.environ[name] = value
+  try:
+    yield
+  finally:
+    if oldvalue is None:
+      del os.environ[name]
+    else:
+      os.environ[name] = oldvalue
+
+@contextlib.contextmanager
+def addtocpath(path):
+  oldvalue = os.environ.get("CPATH", None)
+  if oldvalue is None:
+    value = path
+  else:
+    value = oldvalue+":"+path
+  with setenv("CPATH", value):
+    yield
+
+def runhom4ps(stdin, whichcmdline, verbose=False):
+  cmdline = getcmdline(whichcmdline)
+  if verbose: print stdin
+  with addtocpath(os.path.join(os.environ["CMSSW_BASE"], "include")):
+    p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate(stdin)
+  if "error" in err:
+    raise Hom4PSRuntimeError("hom4ps printed an error message.\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+out+"\n\nstderr:\n\n"+err)
+  match = re.search(r"Failed Paths\s*:\s*([0-9]+)", out)
+  if int(match.group(1)):
+    raise Hom4PSFailedPathsError("hom4ps found some failed paths.\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+out+"\n\nstderr:\n\n"+err)
+  if verbose: print out
+  return out

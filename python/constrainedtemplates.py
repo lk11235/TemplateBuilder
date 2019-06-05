@@ -10,6 +10,8 @@ from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod
 from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
 
+class BadFitStatusException(Exception): pass
+
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
   return {
     "unconstrained": OneTemplate,
@@ -384,14 +386,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     if maxiter is None: maxiter = self.defaultmaxiter
     try:
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
-      if self.cuttingplanehaspermutations and result.status >= 3: raise Exception
+      if self.cuttingplanehaspermutations and result.status >= 3: raise BadFitStatusException
       return result
-    except Exception as e:
+    except BadFitStatusException as e:
       if self.cuttingplanehaspermutations:
         return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
       raise
 
-  defaultmaxiter = 100
+  defaultmaxiter = 500
 
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"

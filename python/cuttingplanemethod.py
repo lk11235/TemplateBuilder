@@ -332,6 +332,7 @@ class CuttingPlaneMethodBase(object):
         return
 
     self.__logger.info("Minimum of the constraint polynomial is {} at {} --> adding a new constraint using this minimum:\n{}".format(minvalue, minimizepolynomial.x, minimizepolynomial.linearconstraint))
+    #self.__logger.info(str(minimizepolynomial))
     self.__cuttingplanes.append(
       cp.matmul(
         minimizepolynomial.linearconstraint[self.useconstraintindices,],

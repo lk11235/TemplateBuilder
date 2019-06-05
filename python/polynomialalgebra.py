@@ -300,17 +300,18 @@ def findcriticalpointsquadraticnd(n, coeffs):
         row[variableletters.index(xs[0])] = coeff
   return np.linalg.solve(A, b).T
 
-def findcriticalpointspolynomialnd(d, n, coeffs, cmdline=hom4pswrapper.smallparalleltdegcmdline(), verbose=False, usespecialcases=True):
+def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True):
   if usespecialcases and d == 2:
     for _ in findcriticalpointsquadraticnd(n, coeffs): yield _
     return
-  p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
-  if verbose: print stdin
-  out, err = p.communicate(stdin)
-  if "error" in err:
-    raise RuntimeError("hom4ps printed an error message.\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+out+"\n\nstderr:\n\n"+err)
-  if verbose: print out
+  try:
+    out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparalleltdeg", verbose=verbose)
+  except hom4pswrapper.Hom4PSFailedPathsError:
+    try:
+      out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparallel", verbose=verbose)
+    except:
+      out = hom4pswrapper.runhom4ps(stdin, whichcmdline="easy", verbose=verbose)
   for solution in out.split("\n\n"):
     if "This solution appears to be real" in solution:
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
@@ -380,6 +381,8 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     if value < minimum:
       minimum = value
       minimumx = cp
+  if minimumx is None:
+    raise ValueError("No critical points?? {}".format(coeffs))
   return OptimizeResult(
     x=np.array(minimumx),
     success=True,
