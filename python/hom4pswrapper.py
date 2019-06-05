@@ -1,4 +1,4 @@
-import contextlib, multiprocessing, os, re, subprocess
+import abc, contextlib, multiprocessing, os, re, subprocess
 
 nproc = multiprocessing.cpu_count()
 
@@ -53,8 +53,24 @@ def getcmdline(which):
     "easy": easycmdline,
   }[which]()
 
-class Hom4PSRuntimeError(RuntimeError): pass
-class Hom4PSFailedPathsError(Hom4PSRuntimeError): pass
+class Hom4PSRuntimeError(RuntimeError):
+  @abc.abstractproperty
+  def errormessage(self): pass
+  def __init__(self, stdin, stdout, stderr):
+    self.stdin = stdin
+    self.stdout = stdout
+    self.stderr = stderr
+    super(Hom4PSRuntimeError, self).__init__(self.errormessage+"\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+stdout+"\n\nstderr:\n\n"+stderr)
+
+class Hom4PSErrorMessage(Hom4PSRuntimeError):
+  errormessage = "hom4ps printed an error message."
+
+class Hom4PSFailedPathsError(Hom4PSRuntimeError):
+  errormessage = "hom4ps found some failed paths."
+  def __init__(self, *args, **kwargs):
+    super(Hom4PSFailedPathsError, self).__init__(*args, **kwargs)
+    match = re.search(r"Failed Paths\s*:\s*([0-9]+)", self.stdout)
+    self.nfailedpaths = int(match.group(1))
 
 @contextlib.contextmanager
 def setenv(name, value):
@@ -85,9 +101,9 @@ def runhom4ps(stdin, whichcmdline, verbose=False):
     p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate(stdin)
   if "error" in err:
-    raise Hom4PSRuntimeError("hom4ps printed an error message.\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+out+"\n\nstderr:\n\n"+err)
+    raise Hom4PSErrorMessage(stdin, out, err)
   match = re.search(r"Failed Paths\s*:\s*([0-9]+)", out)
   if int(match.group(1)):
-    raise Hom4PSFailedPathsError("hom4ps found some failed paths.\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+out+"\n\nstderr:\n\n"+err)
+    raise Hom4PSFailedPathsError(stdin, out, err)
   if verbose: print out
   return out

@@ -307,15 +307,28 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
   try:
     out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparalleltdeg", verbose=verbose)
-  except hom4pswrapper.Hom4PSFailedPathsError:
+  except hom4pswrapper.Hom4PSFailedPathsError as e1:
     try:
       out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparallel", verbose=verbose)
-    except:
-      out = hom4pswrapper.runhom4ps(stdin, whichcmdline="easy", verbose=verbose)
+    except hom4pswrapper.Hom4PSFailedPathsError as e2:
+      try:
+        out = hom4pswrapper.runhom4ps(stdin, whichcmdline="easy", verbose=verbose)
+      except hom4pswrapper.Hom4PSFailedPathsError as e3:
+        out = min(e1, e2, e3, key=lambda x: x.nfailedpaths).stdout
   for solution in out.split("\n\n"):
     if "This solution appears to be real" in solution:
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
+def printresult(function):
+  def newfunction(*args, **kwargs):
+    result = function(*args, **kwargs)
+    print args, kwargs
+    print result
+    raw_input()
+    return result
+  return newfunction
+
+#@printresult
 def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
   if n == 1:
     if d == 0: return minimizeconstant(coeffs)
