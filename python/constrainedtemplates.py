@@ -9,6 +9,7 @@ from uncertainties import ufloat
 from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic
 from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
+from polynomialalgebra import NoCriticalPointsError
 
 class BadFitStatusException(Exception): pass
 
@@ -388,7 +389,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
       if self.cuttingplanehaspermutations and result.status >= 3: raise BadFitStatusException
       return result
-    except BadFitStatusException as e:
+    except (BadFitStatusException, NoCriticalPointsError) as e:
       if self.cuttingplanehaspermutations:
         return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
       raise

@@ -319,6 +319,10 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     if "This solution appears to be real" in solution:
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
 
+class NoCriticalPointsError(ValueError):
+  def __init__(self, coeffs):
+    super(NoCriticalPointsError, self).__init__("can't find critical points for polynomial: {}".format(coeffs))
+
 def printresult(function):
   def newfunction(*args, **kwargs):
     result = function(*args, **kwargs)
@@ -396,7 +400,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
       minimum = value
       minimumx = cp
   if minimumx is None:
-    raise ValueError("No critical points?? {}".format(coeffs))
+    raise NoCriticalPointsError(coeffs)
   return OptimizeResult(
     x=np.array(minimumx),
     success=True,
@@ -435,7 +439,10 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
   best = None
   for permutation in itertools.permutations(xand1):
     permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
-    result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
+    try:
+      result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
+    except NoCriticalPointsError:
+      continue
 
     #want this to be small
     nonzerolinearconstraint = result.linearconstraint[np.nonzero(result.linearconstraint)]
