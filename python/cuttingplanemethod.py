@@ -376,8 +376,9 @@ class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensiona
 
   def constantindex(self, minimizepolynomialresult):
     permutation = minimizepolynomialresult.get("permutation", {"1": "1"})
-    for k, v in permutation.iteritems():
-      if v == "1": permutedtoconstant = k
+    permutedtoconstant = permutation["1"]
+    #for k, v in permutation.iteritems():
+    #  if v == "1": permutedtoconstant = k
     for i, monomial in enumerate(self.monomials):
       if set(monomial.keys()) == {permutedtoconstant}:
         return i
