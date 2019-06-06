@@ -401,13 +401,18 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
       minimumx = cp
   if minimumx is None:
     raise NoCriticalPointsError(coeffs)
+
+  linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
+  if not np.isclose(np.dot(linearconstraint, coeffs), minimum):
+    raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), minimum))
+
   return OptimizeResult(
     x=np.array(minimumx),
     success=True,
     status=1,
     message="gradient is zero at {} real points".format(len(criticalpoints)),
     fun=minimum,
-    linearconstraint=getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx),
+    linearconstraint=linearconstraint,
     boundaryresult=boundaryresult,
   )
 
@@ -424,13 +429,20 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
   result = minimizepolynomialnd(d, n, newcoeffs, **kwargs)
 
   reverse = {v: k for k, v in permutationdict.iteritems()}
-  if reverse == permutationdict: return result
+
+  if all(k == v for k, v in permutationdict.iteritems()): return result
+
+  linearconstraint = np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, reverse)))
+  if permutationdict["1"] == "1" and not np.isclose(np.dot(linearconstraint, coeffs), result.fun):
+    raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), result.fun))
+  if np.sign(np.dot(linearconstraint, coeffs)) != np.sign(result.fun):
+    raise ValueError("sign({}) != sign({})??".format(np.dot(linearconstraint, coeffs), result.fun))
 
   return OptimizeResult(
     permutation=permutationdict,
     permutedresult=result,
     fun=result.fun,
-    linearconstraint=np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, reverse))),
+    linearconstraint=linearconstraint,
     x=(result.x, "permuted")
   )
 
