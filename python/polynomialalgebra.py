@@ -435,7 +435,10 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
   linearconstraint = np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, reverse)))
   #if permutationdict["1"] == "1" and not np.isclose(np.dot(linearconstraint, coeffs), result.fun):
   #  raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), result.fun))
-  if np.sign(np.dot(linearconstraint, coeffs)) != np.sign(result.fun):
+  if (
+    np.sign(np.dot(linearconstraint, coeffs)) != np.sign(result.fun)
+    and not np.isclose(np.dot(linearconstraint, coeffs), result.fun) #numerical issues occasionally give +epsilon and -epsilon when you add in different orders
+  ):
     raise ValueError("sign({}) != sign({})??".format(np.dot(linearconstraint, coeffs), result.fun))
 
   return OptimizeResult(
