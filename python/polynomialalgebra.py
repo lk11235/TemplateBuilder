@@ -403,7 +403,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     raise NoCriticalPointsError(coeffs)
 
   linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
-  if not np.isclose(np.dot(linearconstraint, coeffs), minimum):
+  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-5):
     raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), minimum))
 
   return OptimizeResult(
@@ -433,8 +433,6 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
   if all(k == v for k, v in permutationdict.iteritems()): return result
 
   linearconstraint = np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, reverse)))
-  #if permutationdict["1"] == "1" and not np.isclose(np.dot(linearconstraint, coeffs), result.fun):
-  #  raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), result.fun))
   if (
     np.sign(np.dot(linearconstraint, coeffs)) != np.sign(result.fun)
     and not np.isclose(np.dot(linearconstraint, coeffs), result.fun) #numerical issues occasionally give +epsilon and -epsilon when you add in different orders
