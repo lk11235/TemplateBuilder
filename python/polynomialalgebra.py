@@ -242,7 +242,7 @@ def getpolynomialndmonomials(d, n, coeffs=None, mirrorindices=()):
     itertools.combinations_with_replacement(itertools.izip_longest(xand1, mirrorarray), d),
   ):
     if (coeffs is not coeff is None) or xsandmirrors is None:
-      raise RuntimeError("Provided {} coefficients, need {}".format(len(coeffs), len(list(itertools.combinations_with_replacement(xand1, 4)))))
+      raise RuntimeError("Provided {} coefficients, need {}".format(len(coeffs), len(list(itertools.combinations_with_replacement(xand1, d)))))
     xs, mirrors = itertools.izip(*xsandmirrors)
     ctr = collections.Counter(xs)
     if coeffs is None:
@@ -435,6 +435,8 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
   linearconstraint = np.array(list(coeffswithpermutedvariables(d, n, result.linearconstraint, reverse)))
   if (
     np.sign(np.dot(linearconstraint, coeffs)) != np.sign(result.fun)
+    and np.sign(np.dot(linearconstraint, coeffs)) != 0
+    and np.sign(result.fun) != 0
     and not np.isclose(np.dot(linearconstraint, coeffs), result.fun) #numerical issues occasionally give +epsilon and -epsilon when you add in different orders
   ):
     raise ValueError("sign({}) != sign({})??".format(np.dot(linearconstraint, coeffs), result.fun))
