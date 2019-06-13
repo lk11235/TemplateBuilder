@@ -258,6 +258,10 @@ class TemplateBuilder(object):
     logfilenames = [re.sub("[.]root$", ".log", outfilename) for outfilename in outfilenames]
     assert not set(logfilenames) & set(outfilenames), set(logfilenames) & set(outfilenames)
 
+    for outfilename, logfilename in itertools.izip(outfilenames, logfilenames):
+      if os.path.exists(logfilename) and not os.path.exists(outfilename):
+        os.remove(logfilename)
+
     commonprefix = os.path.commonprefix(outfilenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in outfilenames))[::-1]
 
@@ -269,7 +273,7 @@ class TemplateBuilder(object):
     if self.__useexistingcomponents:
       fileopenoption = "UPDATE"
 
-    with RootFiles(*outfilenames, commonargs=[fileopenoption]) as newfiles, opens(*logfilenames, commonargs="w") as logfiles:
+    with RootFiles(*outfilenames, commonargs=[fileopenoption]) as newfiles, opens(*logfilenames, commonargs="a") as logfiles:
       for config, outfilename, outfile, logfile in itertools.izip(self.__configs, outfilenames, newfiles, logfiles):
         with RootCd(outfile):
           for templateconfig in config["templates"]:
