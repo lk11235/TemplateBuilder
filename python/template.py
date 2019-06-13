@@ -48,6 +48,7 @@ class Template(object):
       self.__alreadyexists = True
       self.__h = hkey.ReadObj()
       self.__finalized = self.__didscale = self.__didcheckmirror = self.__didfloor = True
+      self.__h.SetDirectory(0)
     else:
       self.__alreadyexists = False
       self.__h = ROOT.TH3F(
