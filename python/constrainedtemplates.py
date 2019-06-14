@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 from uncertainties import ufloat
 
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic
 from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
 from polynomialalgebra import NoCriticalPointsError
@@ -22,6 +22,8 @@ def ConstrainedTemplates(constrainttype, *args, **kwargs):
     "fourparameterggH": FourParameterggH,
     "fourparameterVVH": FourParameterVVH,
     "fourparameterWWH": FourParameterWWH,
+    "fourparameterVVH_nog4int": FourParameterVVH_nog4int,
+    "fourparameterWWH_nog4int": FourParameterWWH_nog4int,
   }[constrainttype](*args, **kwargs)
 
 class ConstrainedTemplatesBase(object):
@@ -525,4 +527,22 @@ class FourParameterWWH(ConstrainedTemplatesWithFit):
     if index not in FourParameterVVH.gZ3indices
   )
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic)
+  cuttingplanehaspermutations = True
+
+class FourParameterVVH_nog4int(ConstrainedTemplatesWithFit):
+  templatenames = tuple(name for name in FourParameterVVH.templatenames if "gi1" not in name and "gi3" not in name)
+  pureindices = tuple(
+    index - sum(1 for i, name in enumerate(FourParameterVVH.templatenames) if i < index and ("gi1" in name or "gi3" in name))
+    for index in FourParameterVVH.pureindices
+  )
+  cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_1stvariableonlyeven)
+  cuttingplanehaspermutations = True
+
+class FourParameterWWH_nog4int(ConstrainedTemplatesWithFit):
+  templatenames = tuple(name for name in FourParameterWWH.templatenames if "gi1" not in name and "gi3" not in name)
+  pureindices = tuple(
+    index - sum(1 for i, name in enumerate(FourParameterWWH.templatenames) if i < index and ("gi1" in name or "gi3" in name))
+    for index in FourParameterWWH.pureindices
+  )
+  cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven)
   cuttingplanehaspermutations = True

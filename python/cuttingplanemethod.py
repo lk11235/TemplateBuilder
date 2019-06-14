@@ -394,6 +394,47 @@ class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensiona
   @property
   def xsize(self): return special.comb(self.nvariables+1, self.degree, repetition=True, exact=True)
 
+class CuttingPlaneMethod_InsertZeroAtIndices(CuttingPlaneMethodMultiDimensionalSimple):
+  def evalconstraint(self, coeffs, **kwargs):
+    coeffs = iter(coeffs)
+    newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
+    for remaining in coeffs: assert False
+    return self.minimizepolynomialfunction(self.degree, self.nvariables, newcoeffs, **kwargs)
+
+  def constantindex(self, minimizepolynomialresult):
+    permutation = minimizepolynomialresult.get("permutation", {"1": "1"})
+    permutedtoconstant = permutation["1"]
+    for i, monomial in enumerate(self.monomials):
+      if set(monomial.keys()) == {permutedtoconstant}:
+        return i
+    assert permutedtoconstant in self.variableswithnoquarticterm
+    return None
+
+  @abc.abstractproperty
+  def variableswithnoquarticterm(self): "can be a class member"
+  @abc.abstractproperty
+  def insertzeroatindices(self): "can be a class member"
+
+  @property
+  def monomials(self):
+    result = list(super(CuttingPlaneMethod_InsertZeroAtIndices, self).monomials)
+    for _ in sorted(self.insertzeroatindices, reverse=True):
+      del result[_]
+    return result
+  @property
+  def useconstraintindices(self):
+    result = range(len(super(CuttingPlaneMethod_InsertZeroAtIndices, self).monomials))
+    for _ in sorted(self.insertzeroatindices, reverse=True):
+      del result[_]
+    return result
+  @property
+  def xsize(self):
+    result = super(CuttingPlaneMethod_InsertZeroAtIndices, self).xsize - len(self.insertzeroatindices)
+    if result != self.expectedxsize is not None:
+      raise ValueError("Expected xsize to be {} but it's {}".format(self.expectedxsize, result))
+    return result
+  expectedxsize = None
+
 class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
   degree = 2
   nvariables = 3
@@ -406,36 +447,32 @@ class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodMultiDimensionalSimple):
   degree = 4
   nvariables = 4
 
-class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethodMultiDimensional):
-  xsize = 65
-  def constantindex(self, minimizepolynomialresult):
-    permutation = minimizepolynomialresult.get("permutation", {"1": "1"})
-    for k, v in permutation.iteritems():
-      if v == "1": permutedtoconstant = k
-    for i, monomial in enumerate(self.monomials):
-      if set(monomial.keys()) == {permutedtoconstant}:
-        return i
-    assert permutedtoconstant == "z"
-    return None
+class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  expectedxsize = 65
   def insertzeroatindices():
     for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
       if variables["z"] >= 3:
         yield idx
   insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = "z",
 
-  useconstraintindices = range(70)
-  monomials = list(getpolynomialndmonomials(4, 4))
-  for _ in sorted(insertzeroatindices, reverse=True):
-    assert useconstraintindices[_] == _
-    del useconstraintindices[_]
-    del monomials[_]
-  del _
+class CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  expectedxsize = 46
+  def insertzeroatindices():
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
+      if variables["w"] in (1, 3):
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = ()
 
-  def evalconstraint(self, coeffs, **kwargs):
-    coeffs = iter(coeffs)
-    newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
-    for remaining in coeffs: assert False
-    return self.minimizepolynomialfunction(4, 4, newcoeffs, **kwargs)
+class CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  expectedxsize = 42
+  def insertzeroatindices():
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
+      if variables["w"] in (1, 3) or variables["z"] >= 3:
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = "z",
 
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
@@ -449,6 +486,10 @@ def cuttingplanemethod4dquartic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableQuadratic(*args, **kwargs).run()
+def cuttingplanemethod4dquartic_1stvariableonlyeven(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(*args, **kwargs).run()
+def cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(*args, **kwargs).run()
 
 class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingPlaneMethodMultiDimensional):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
