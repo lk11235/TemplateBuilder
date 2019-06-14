@@ -350,11 +350,13 @@ class CuttingPlaneMethod1DQuadratic(CuttingPlaneMethodBase):
   xsize = 3
   monomials = list(getpolynomialndmonomials(2, 1))
   evalconstraint = staticmethod(minimizequadratic)
+  def constantindex(self, minimizepolynomialresult): return 0
 
 class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
   xsize = 5
   monomials = list(getpolynomialndmonomials(4, 1))
   evalconstraint = staticmethod(minimizequartic)
+  def constantindex(self, minimizepolynomialresult): return 0
 
 class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
   def __init__(self, *args, **kwargs):
