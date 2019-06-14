@@ -279,7 +279,7 @@ class CuttingPlaneMethodBase(object):
         message="reached max number of iterations"
                 #", no constant term to increase!"
                 ,
-        fun=minvalue - self.__funatminimum
+        fun=self.__tominimize.value - self.__funatminimum
       )
       return
 
@@ -327,7 +327,7 @@ class CuttingPlaneMethodBase(object):
           nit=len(self.__cuttingplanes)+1,
           maxcv=0,
           message=extramessage + "multiplied constant term by (1+{}) to get within constraint".format(x[constantindex] / oldconstant - 1),
-          fun=minvalue - self.__funatminimum
+          fun=self.__tominimize.value - self.__funatminimum
         )
         return
 
