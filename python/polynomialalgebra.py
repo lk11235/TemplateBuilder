@@ -308,13 +308,19 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   try:
     out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparalleltdeg", verbose=verbose)
   except hom4pswrapper.Hom4PSFailedPathsError as e1:
+    if verbose: print e1.stdout
     try:
       out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparallel", verbose=verbose)
     except hom4pswrapper.Hom4PSFailedPathsError as e2:
+      if verbose: print e2.stdout
       try:
         out = hom4pswrapper.runhom4ps(stdin, whichcmdline="easy", verbose=verbose)
       except hom4pswrapper.Hom4PSFailedPathsError as e3:
+        if verbose:
+          print e3.stdout
+          print "All three calls failed: picking the one with the least failed paths."
         out = min(e1, e2, e3, key=lambda x: x.nfailedpaths).stdout
+  if verbose: print out
   for solution in out.split("\n\n"):
     if "This solution appears to be real" in solution:
       yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
