@@ -1,5 +1,7 @@
 import abc, contextlib, multiprocessing, os, re, subprocess
 
+import numpy as np
+
 nproc = multiprocessing.cpu_count()
 
 def getcommandline(dispatch=None, engine=None, threads=None, pre=["balance", "const"], post=["pop", "pop", "refine", "summary"], mprec=None, summarydigits=None, homotopy="polyexp"):
@@ -53,14 +55,36 @@ def getcmdline(which):
     "easy": easycmdline,
   }[which]()
 
-class Hom4PSRuntimeError(RuntimeError):
-  @abc.abstractproperty
-  def errormessage(self): pass
+class Hom4PSResult(object):
+  superinitargs = ()
   def __init__(self, stdin, stdout, stderr):
     self.stdin = stdin
     self.stdout = stdout
     self.stderr = stderr
-    super(Hom4PSRuntimeError, self).__init__(self.errormessage+"\n\ninput:\n\n"+stdin+"\n\nstdout:\n\n"+stdout+"\n\nstderr:\n\n"+stderr)
+    super(Hom4PSResult, self).__init__(*self.superinitargs)
+  @property
+  def nfailedpaths(self):
+    return int(re.search(r"Failed Paths\s*:\s*([0-9]+)", self.stdout).group(1))
+  @property
+  def solutions(self):
+    result = []
+    for solution in self.stdout.split("\n\n"):
+      if not re.search("solution *#", solution): continue
+      match = re.search(r"values: *([^\n]*)", solution)
+      if "This solution appears to be real" in solution:
+        result.append(np.array([float(_) for _ in match.group(1).split()]))
+      else:
+        result.append(np.array([complex(re.sub(r"i[*]([0-9Ee.+-]+)", r"\1j", _).replace("+-", "-")) for _ in match.group(1).split()]))
+    return result
+  @property
+  def realsolutions(self):
+    return [solution for solution in self.solutions if np.all(np.isreal(solution))]
+
+class Hom4PSRuntimeError(Hom4PSResult, RuntimeError):
+  @abc.abstractproperty
+  def errormessage(self): pass
+  @property
+  def superinitargs(self): return self.errormessage+"\n\ninput:\n\n"+self.stdin+"\n\nstdout:\n\n"+self.stdout+"\n\nstderr:\n\n"+self.stderr,
 
 class Hom4PSErrorMessage(Hom4PSRuntimeError):
   errormessage = "hom4ps printed an error message."
@@ -69,8 +93,7 @@ class Hom4PSFailedPathsError(Hom4PSRuntimeError):
   errormessage = "hom4ps found some failed paths."
   def __init__(self, *args, **kwargs):
     super(Hom4PSFailedPathsError, self).__init__(*args, **kwargs)
-    match = re.search(r"Failed Paths\s*:\s*([0-9]+)", self.stdout)
-    self.nfailedpaths = int(match.group(1))
+    assert self.nfailedpaths != 0
 
 @contextlib.contextmanager
 def setenv(name, value):
@@ -104,6 +127,7 @@ def runhom4ps(stdin, whichcmdline, verbose=False):
     raise Hom4PSErrorMessage(stdin, out, err)
   match = re.search(r"Failed Paths\s*:\s*([0-9]+)", out)
   if int(match.group(1)):
+    if verbose: print out
     raise Hom4PSFailedPathsError(stdin, out, err)
   if verbose: print out
-  return out
+  return Hom4PSResult(stdin, out, err)

@@ -302,32 +302,73 @@ def findcriticalpointsquadraticnd(n, coeffs):
 
 def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True):
   if usespecialcases and d == 2:
-    for _ in findcriticalpointsquadraticnd(n, coeffs): yield _
-    return
+    return findcriticalpointsquadraticnd(n, coeffs)
   stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
-  try:
-    out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparalleltdeg", verbose=verbose)
-  except hom4pswrapper.Hom4PSFailedPathsError as e1:
-    if verbose: print e1.stdout
+
+  errors = []
+  for cmdline in "smallparalleltdeg", "smallparallel", "easy":
     try:
-      out = hom4pswrapper.runhom4ps(stdin, whichcmdline="smallparallel", verbose=verbose)
-    except hom4pswrapper.Hom4PSFailedPathsError as e2:
-      if verbose: print e2.stdout
-      try:
-        out = hom4pswrapper.runhom4ps(stdin, whichcmdline="easy", verbose=verbose)
-      except hom4pswrapper.Hom4PSFailedPathsError as e3:
-        if verbose:
-          print e3.stdout
-          print "All three calls failed: picking the one with the least failed paths."
-        out = min(e1, e2, e3, key=lambda x: x.nfailedpaths).stdout
-  if verbose: print out
-  for solution in out.split("\n\n"):
-    if "This solution appears to be real" in solution:
-      yield [float(_) for _ in solution.split("\n")[-1].split()[1:]]
+      result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
+    except hom4pswrapper.Hom4PSFailedPathsError as e:
+      errors.append(e)
+    else:
+      return result.realsolutions
+
+  if verbose:
+    print "seeing if those calls gave different solutions, in case between them we have them all covered"
+
+  solutions = []
+  isclosekwargs = {"rtol": 1e-5, "atol": 1e-08}  #defaults from numpy
+  for error in errors:
+    thesesolutions = error.realsolutions
+
+    if any(np.all(first == second) for first, second in itertools.combinations(thesesolutions, 2)):
+      raise NotImplementedError() #need some more complicated logic if this happens
+    while any(np.all(np.isclose(first, second, **isclosekwargs)) for first, second in itertools.combinations(thesesolutions, 2)):
+      isclosekwargs["rtol"] /= 2
+      isclosekwargs["atol"] /= 2
+
+    for newsolution in thesesolutions:
+      if not any(np.all(np.isclose(newsolution, oldsolution, **isclosekwargs)) for oldsolution in solutions):
+        solutions.append(newsolution)
+
+  numberofpossiblesolutions = min(len(e.solutions) + e.nfailedpaths for e in errors)
+
+  if len(solutions) > numberofpossiblesolutions:
+    raise NoCriticalPointsError(coeffs, moremessage="found too many critical points in the union of the different configurations", solutions=solutions)
+
+  if len(solutions) == numberofpossiblesolutions:
+    if verbose: print "we do"
+    return solutions
+
+  """
+  #set the smallest coefficient (in abs) to 0 and see if that fixes the failed paths without ruining the previous solutions
+  #calls this function again, so can recursively set multiple coefficients to 0 if that's what it takes
+  if verbose: print "trying again after setting the smallest coefficient to 0 (recursively)"
+  newcoeffs = np.copy(coeffs)
+  smallest = min(_ for _ in abs(newcoeffs) if _ != 0)
+  if verbose: print "smallest coefficient:", smallest
+  newcoeffs[abs(newcoeffs)==smallest] = 0
+  newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases)
+  for oldsolution in solutions:
+    if verbose: print "checking if old solution {} is still here".format(oldsolution)
+    if not any(np.all(np.isclose(oldsolution, newsolution, **isclosekwargs)) for newsolution in newsolutions):
+      if verbose: print "it's not"
+      break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
+    if verbose: print "it is"
+  else:  #removing this coefficient didn't mess up the old solutions
+    return newsolutions
+  """
+
+  raise NoCriticalPointsError(coeffs, moremessage="there are failed paths, even after trying different configurations and saving mechanisms", solutions=solutions)
 
 class NoCriticalPointsError(ValueError):
-  def __init__(self, coeffs):
-    super(NoCriticalPointsError, self).__init__("can't find critical points for polynomial: {}".format(coeffs))
+  def __init__(self, coeffs, moremessage=None, solutions=None):
+    message = "error finding critical points for polynomial: {}".format(coeffs)
+    if moremessage: message += "\n\n"+moremessage
+    super(NoCriticalPointsError, self).__init__(message)
+    self.coeffs = coeffs
+    self.solutions = solutions
 
 def printresult(function):
   def newfunction(*args, **kwargs):
@@ -406,7 +447,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
       minimum = value
       minimumx = cp
   if minimumx is None:
-    raise NoCriticalPointsError(coeffs)
+    raise NoCriticalPointsError(coeffs, moremessage="system of polynomials doesn't have any critical points")
 
   linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
   if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-5):
@@ -488,13 +529,32 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
   return result
 
 if __name__ == "__main__":
-  coeffs = np.array([
-    7.14562045e-06, -5.77999470e-07,  8.02158736e-06,  1.19417131e-05,
-    4.58641642e-06,  8.61578331e-07, -9.05128851e-07, -1.12497735e-06,
-   -6.14150255e-07,  1.39521049e-06,  5.74903386e-06,  1.76204796e-06,
-    5.17540756e-06,  2.32619519e-06,  1.94951576e-05
-  ])
+  coeffs = np.array([float(_) for _ in """
+        5.49334216e-09 -9.84400122e-09  4.38160058e-07 -1.26382479e-07
+       -9.12089215e-10  1.01516341e-06 -1.26332021e-07  1.09256020e-07
+        1.63314502e-09  1.03372119e-05 -4.96514478e-06 -7.80328090e-08
+        5.99469948e-07  2.18440354e-08  9.52325483e-09 -5.08274877e-07
+        6.57523730e-06  6.04471018e-06 -1.30160136e-06 -6.39638559e-07
+        4.03655366e-07  1.97068383e-08  1.61606392e-07 -1.96627744e-08
+        0.00000000e+00  1.38450711e-05  9.09015592e-06 -1.71721919e-06
+       -9.80367599e-06  8.96773536e-07  8.06458361e-07  1.43873072e-06
+       -1.19835291e-07  0.00000000e+00  0.00000000e+00  4.06317330e-07
+       -3.33848064e-07 -2.14655695e-07  9.67377758e-08  2.86534044e-06
+        1.28511390e-06 -8.78287961e-07  5.24488740e-06 -1.27394601e-06
+        1.19881998e-05 -5.41396188e-07 -4.49905521e-07  1.26380292e-07
+        4.44793949e-07 -7.02872007e-08  4.20198939e-16  4.65950944e-08
+       -8.35958714e-09  2.03796222e-07  0.00000000e+00  9.50188566e-07
+        3.69815932e-06 -1.11180898e-06  1.87621678e-06 -9.39022434e-07
+        1.35841041e-05 -3.41416561e-06  7.81379717e-07  3.12984343e-14
+        0.00000000e+00  8.04957702e-07 -1.34019321e-07  1.47580088e-06
+        0.00000000e+00  0.00000000e+00
+  """.split()])
 
-  print np.array(list(findcriticalpointspolynomialnd(2, 4, coeffs)))
-  print np.array(list(findcriticalpointspolynomialnd(2, 4, coeffs, usespecialcases=False)))
-  print findcriticalpointsquadraticnd(4, coeffs)
+  import argparse
+  p = argparse.ArgumentParser()
+  p.add_argument("--verbose", action="store_true")
+  args = p.parse_args()
+
+  coeffs = coeffswithpermutedvariables(4, 4, coeffs, {"1": "z", "z": "1", "x": "x", "y": "y", "w": "w"})
+
+  print np.array(list(findcriticalpointspolynomialnd(4, 4, coeffs, **args.__dict__)))
