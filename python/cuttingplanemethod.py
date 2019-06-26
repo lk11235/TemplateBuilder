@@ -241,7 +241,7 @@ class CuttingPlaneMethodBase(object):
 
       #does it satisfy the constraints?
 
-      minimizepolynomial = self.evalconstraint(x, *self.__moreargsforevalconstraint)
+      minimizepolynomial = self.evalconstraint(x, *self.__multipliedargsforevalconstraint)
       minvalue = minimizepolynomial.fun
     except BaseException as e:
       if self.__printlogaterror and not self.__printaswego:
