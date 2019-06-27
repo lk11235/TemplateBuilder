@@ -323,7 +323,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     thesesolutions = error.realsolutions
 
     if any(np.all(first == second) for first, second in itertools.combinations(thesesolutions, 2)):
-      raise NotImplementedError() #need some more complicated logic if this happens
+      raise NotImplementedError(error.stdin+"\n\n"+error.stdout) #need some more complicated logic if this happens
     while any(np.all(np.isclose(first, second, **isclosekwargs)) for first, second in itertools.combinations(thesesolutions, 2)):
       isclosekwargs["rtol"] /= 2
       isclosekwargs["atol"] /= 2
