@@ -257,10 +257,19 @@ class TemplateBuilder(object):
         outfilenames = [re.sub("[.]root$", "_debug.root", outfilename) for outfilename in outfilenames]
     logfilenames = [re.sub("[.]root$", ".log", outfilename) for outfilename in outfilenames]
     assert not set(logfilenames) & set(outfilenames), set(logfilenames) & set(outfilenames)
+    donefilenames = [re.sub("[.]root$", ".done", outfilename) for outfilename in outfilenames]
+    assert not set(donefilenames) & set(outfilenames), set(donefilenames) & set(outfilenames)
 
-    for outfilename, logfilename in itertools.izip(outfilenames, logfilenames):
+    for outfilename, logfilename, donefilename in itertools.izip(outfilenames[:], logfilenames[:], donefilenames[:]):
       if os.path.exists(logfilename) and not os.path.exists(outfilename):
         os.remove(logfilename)
+      if os.path.exists(donefilename) and not os.path.exists(outfilename) or not self.__useexistingtemplates:
+        os.remove(donefilename)
+
+      if os.path.exists(donefilename):
+        outfilenames.remove(outfilename)
+        logfilenames.remove(logfilename)
+        donefilenames.remove(donefilename)
 
     commonprefix = os.path.commonprefix(outfilenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in outfilenames))[::-1]
@@ -340,3 +349,5 @@ class TemplateBuilder(object):
       for template in templates:
         if not template.finalized:
           raise RuntimeError("Never finalized {}".format(template.name))
+
+    with opens(*donefilenames, commonargs="w"): pass
