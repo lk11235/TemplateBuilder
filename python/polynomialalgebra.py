@@ -22,7 +22,7 @@ import subprocess
 import numpy as np
 
 import hom4pswrapper
-from moremath import notnan
+from moremath import closebutnotequal, notnan
 from optimizeresult import OptimizeResult
 
 @notnan
@@ -318,18 +318,16 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     print "seeing if those calls gave different solutions, in case between them we have them all covered"
 
   solutions = []
-  isclosekwargs = {"rtol": 1e-5, "atol": 1e-08}  #defaults from numpy
+  allclosekwargs = {"rtol": 1e-5, "atol": 1e-08}  #defaults from numpy
   for error in errors:
     thesesolutions = error.realsolutions
 
-    if any(np.all(first == second) for first, second in itertools.combinations(thesesolutions, 2)):
-      raise NotImplementedError(error.stdin+"\n\n"+error.stdout) #need some more complicated logic if this happens
-    while any(np.all(np.isclose(first, second, **isclosekwargs)) for first, second in itertools.combinations(thesesolutions, 2)):
-      isclosekwargs["rtol"] /= 2
-      isclosekwargs["atol"] /= 2
+    while any(closebutnotequal(first, second, **allclosekwargs) for first, second in itertools.combinations(thesesolutions, 2)):
+      allclosekwargs["rtol"] /= 2
+      allclosekwargs["atol"] /= 2
 
     for newsolution in thesesolutions:
-      if not any(np.all(np.isclose(newsolution, oldsolution, **isclosekwargs)) for oldsolution in solutions):
+      if not any(closebutnotequal(newsolution, oldsolution, **allclosekwargs) for oldsolution in solutions):
         solutions.append(newsolution)
 
   numberofpossiblesolutions = min(len(e.solutions) + e.nfailedpaths for e in errors)
@@ -352,7 +350,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases)
   for oldsolution in solutions:
     if verbose: print "checking if old solution {} is still here".format(oldsolution)
-    if not any(np.all(np.isclose(oldsolution, newsolution, **isclosekwargs)) for newsolution in newsolutions):
+    if not any(closebutnotequal(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
       if verbose: print "it's not"
       break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
     if verbose: print "it is"

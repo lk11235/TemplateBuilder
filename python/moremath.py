@@ -38,3 +38,6 @@ def notnan(function):
       )
     return result
   return newfunction
+
+def closebutnotequal(array1, array2, **allclosekwargs):
+  return np.allclose(array1, array2, **allclosekwargs) and not np.array_equal(array1, array2)
