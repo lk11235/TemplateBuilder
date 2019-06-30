@@ -66,6 +66,9 @@ class Hom4PSResult(object):
   def nfailedpaths(self):
     return int(re.search(r"Failed Paths\s*:\s*([0-9]+)", self.stdout).group(1))
   @property
+  def ndivergentpaths(self):
+    return int(re.search(r"Divergent:\s*([0-9]+)", self.stdout).group(1))
+  @property
   def solutions(self):
     result = []
     for solution in self.stdout.split("\n\n"):
@@ -94,6 +97,15 @@ class Hom4PSFailedPathsError(Hom4PSRuntimeError):
   def __init__(self, *args, **kwargs):
     super(Hom4PSFailedPathsError, self).__init__(*args, **kwargs)
     assert self.nfailedpaths != 0
+
+class Hom4PSDivergentPathsError(Hom4PSRuntimeError):
+  errormessage = "hom4ps found some divergent paths."
+  def __init__(self, *args, **kwargs):
+    super(Hom4PSDivergentPathsError, self).__init__(*args, **kwargs)
+    assert self.ndivergentpaths != 0
+
+class Hom4PSDivergentAndFailedPathsError(Hom4PSFailedPathsError, Hom4PSDivergentPathsError):
+  errormessage = "hom4ps found some divergent paths and some failed paths."
 
 @contextlib.contextmanager
 def setenv(name, value):
@@ -125,9 +137,14 @@ def runhom4ps(stdin, whichcmdline, verbose=False):
     out, err = p.communicate(stdin)
   if "error" in err:
     raise Hom4PSErrorMessage(stdin, out, err)
-  match = re.search(r"Failed Paths\s*:\s*([0-9]+)", out)
-  if int(match.group(1)):
+  result = Hom4PSResult(stdin, out, err)
+  if result.nfailedpaths or result.ndivergentpaths:
     if verbose: print out
-    raise Hom4PSFailedPathsError(stdin, out, err)
+    if not result.nfailedpaths:
+      raise Hom4PSDivergentPathsError(stdin, out, err)
+    elif not result.ndivergentpaths:
+      raise Hom4PSFailedPathsError(stdin, out, err)
+    else:
+      raise Hom4PSDivergentAndFailedPathsError(stdin, out, err)
   if verbose: print out
-  return Hom4PSResult(stdin, out, err)
+  return result

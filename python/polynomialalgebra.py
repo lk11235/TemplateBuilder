@@ -309,7 +309,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   for cmdline in "smallparalleltdeg", "smallparallel", "easy":
     try:
       result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
-    except hom4pswrapper.Hom4PSFailedPathsError as e:
+    except (hom4pswrapper.Hom4PSFailedPathsError, hom4pswrapper.Hom4PSDivergentPathsError) as e:
       errors.append(e)
     else:
       return result.realsolutions
@@ -330,7 +330,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
       if not any(closebutnotequal(newsolution, oldsolution, **allclosekwargs) for oldsolution in solutions):
         solutions.append(newsolution)
 
-  numberofpossiblesolutions = min(len(e.solutions) + e.nfailedpaths for e in errors)
+  numberofpossiblesolutions = min(len(e.solutions) + e.nfailedpaths + e.ndivergentpaths for e in errors)
 
   if len(solutions) > numberofpossiblesolutions:
     raise NoCriticalPointsError(coeffs, moremessage="found too many critical points in the union of the different configurations", solutions=solutions)
@@ -358,7 +358,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     return newsolutions
   """
 
-  raise NoCriticalPointsError(coeffs, moremessage="there are failed paths, even after trying different configurations and saving mechanisms", solutions=solutions)
+  raise NoCriticalPointsError(coeffs, moremessage="there are failed and/or divergent paths, even after trying different configurations and saving mechanisms", solutions=solutions)
 
 class NoCriticalPointsError(ValueError):
   def __init__(self, coeffs, moremessage=None, solutions=None):
