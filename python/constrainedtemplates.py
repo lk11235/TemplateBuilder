@@ -391,7 +391,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
       if self.cuttingplanehaspermutations and result.status >= 3: raise BadFitStatusException
       return result
-    except (BadFitStatusException, NoCriticalPointsError) as e:
+    except BadFitStatusException as e:
       if self.cuttingplanehaspermutations:
         return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
       raise

@@ -7,7 +7,7 @@ import cvxpy as cp
 from scipy import optimize, special
 
 from optimizeresult import OptimizeResult
-from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizequadratic, minimizequartic
+from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizepolynomialnd_permutationsasneeded, minimizequadratic, minimizequartic
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
@@ -360,16 +360,18 @@ class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
 
 class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
   def __init__(self, *args, **kwargs):
-    self.__usepermutations = kwargs.pop("usepermutations", False)
+    self.__usepermutations = kwargs.pop("usepermutations", "asneeded")
     super(CuttingPlaneMethodMultiDimensional, self).__init__(*args, **kwargs)
 
   def minimizepolynomialfunction(self, *args, **kwargs):
     if "permutationdict" in kwargs:
-        function = minimizepolynomialnd_permutation
-    elif self.__usepermutations:
-        function = minimizepolynomialnd_permutations
+      function = minimizepolynomialnd_permutation
     else:
-        function = minimizepolynomialnd
+      function = {
+        True: minimizepolynomialnd_permutations,
+        False: minimizepolynomialnd,
+        "asneeded": minimizepolynomialnd_permutationsasneeded,
+      }[self.__usepermutations]
     return function(*args, **kwargs)
 
 class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensional):

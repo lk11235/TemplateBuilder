@@ -306,7 +306,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
 
   errors = []
-  for cmdline in "smallparalleltdeg", "smallparallel", "easy":
+  for cmdline in "smallparalleltdeg",:# "smallparallel", "easy":
     try:
       result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
     except (hom4pswrapper.Hom4PSFailedPathsError, hom4pswrapper.Hom4PSDivergentPathsError) as e:
@@ -494,10 +494,37 @@ def minimizepolynomialnd_permutation(d, n, coeffs, permutationdict, **kwargs):
     x=(result.x, "permuted")
   )
 
+def permutations_differentonesfirst(iterable):
+  """
+  Variation of itertools.permutations:
+    it tries to find the one that is most different from all the ones
+    returned so far.  For example, permutations_finddifferentones("ABCD")
+    starts by yielding ABCD as usual, but then goes to BADC
+    followed by CDAB and DCBA
+  """
+  tpl = tuple(iterable)
+  permutations = list(itertools.permutations(tpl))
+  done = []
+  while permutations:
+    best = None
+    bestfom = -float("inf")
+    for permutation in permutations:
+      figureofmerit = sum(sum(x != y for x, y in itertools.izip(permutation, oldpermutation)) for oldpermutation in done)
+      if figureofmerit > bestfom:
+        bestfom = figureofmerit
+        best = permutation
+    done.append(best)
+    permutations.remove(best)
+    yield best
+
+
 def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
+  permutationmode = kwargs.pop("permutationmode", "best")
+  assert permutationmode in ("best", "asneeded")
+
   xand1 = "1"+getnvariableletters(n)
   best = None
-  for permutation in itertools.permutations(xand1):
+  for permutation in permutations_differentonesfirst(xand1):
     permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
     try:
       result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
@@ -519,12 +546,18 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
 
     if debugprint: print "---------------------------------"
 
-    if result.fun > 0 or figureofmerit <= (0, 50):
+    if {
+      "best": result.fun > 0 or figureofmerit <= (0, 50),
+      "asneeded": True,
+    }[permutationmode]:
       break
 
   permutation, permutationdict, result, figureofmerit = best
 
   return result
+
+def minimizepolynomialnd_permutationsasneeded(*args, **kwargs):
+  return minimizepolynomialnd_permutations(*args, permutationmode="asneeded", **kwargs)
 
 if __name__ == "__main__":
   coeffs = np.array([float(_) for _ in """
@@ -553,6 +586,8 @@ if __name__ == "__main__":
   p.add_argument("--verbose", action="store_true")
   args = p.parse_args()
 
-  coeffs = coeffswithpermutedvariables(4, 4, coeffs, {"1": "z", "z": "1", "x": "x", "y": "y", "w": "w"})
+  print minimizepolynomialnd_permutationsasneeded(4, 4, coeffs, verbose=True)
 
-  print np.array(list(findcriticalpointspolynomialnd(4, 4, coeffs, **args.__dict__)))
+  #coeffs = coeffswithpermutedvariables(4, 4, coeffs, {"1": "z", "z": "1", "x": "x", "y": "y", "w": "w"})
+
+  #print np.array(list(findcriticalpointspolynomialnd(4, 4, coeffs, **args.__dict__)))
