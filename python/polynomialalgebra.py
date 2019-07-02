@@ -448,7 +448,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     raise NoCriticalPointsError(coeffs, moremessage="system of polynomials doesn't have any critical points")
 
   linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
-  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-5):
+  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-4):
     raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), minimum))
 
   return OptimizeResult(
