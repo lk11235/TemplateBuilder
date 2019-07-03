@@ -396,14 +396,14 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
       raise
 
-  defaultmaxiter = 500
+  defaultmaxiter = 2000
 
 class OneParameterggH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "int", "BSM"
   pureindices = 0, 2
   cuttingplanefunction = staticmethod(cuttingplanemethod1dquadratic)
   cuttingplanehaspermutations = False
-  defaultmaxiter = 500
+  defaultmaxiter = 2000
 
 class OneParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = "SM", "g13gi1", "g12gi2", "g11gi3", "BSM"
@@ -421,7 +421,7 @@ class ThreeParameterggH(ConstrainedTemplatesWithFit):
   pureindices = 0, 4, 7, 9
   cuttingplanefunction = staticmethod(cuttingplanemethod3dquadratic)
   cuttingplanehaspermutations = True
-  defaultmaxiter = 500
+  defaultmaxiter = 2000
 
 class FourParameterggH(ConstrainedTemplatesWithFit):
   templatenames = (
@@ -434,7 +434,7 @@ class FourParameterggH(ConstrainedTemplatesWithFit):
   pureindices = 0, 5, 9, 12, 14
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquadratic)
   cuttingplanehaspermutations = True
-  defaultmaxiter = 500
+  defaultmaxiter = 2000
 
 class FourParameterVVH(ConstrainedTemplatesWithFit):
   templatenames = (
