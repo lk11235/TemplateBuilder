@@ -300,13 +300,13 @@ def findcriticalpointsquadraticnd(n, coeffs):
         row[variableletters.index(xs[0])] = coeff
   return np.linalg.solve(A, b).T
 
-def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True):
+def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True, cmdlinestotry=("smallparalleltdeg",)):
   if usespecialcases and d == 2:
     return findcriticalpointsquadraticnd(n, coeffs)
   stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
 
   errors = []
-  for cmdline in "smallparalleltdeg",:# "smallparallel", "easy":
+  for cmdline in cmdlinestotry:
     try:
       result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
     except (hom4pswrapper.Hom4PSFailedPathsError, hom4pswrapper.Hom4PSDivergentPathsError) as e:
@@ -518,8 +518,7 @@ def permutations_differentonesfirst(iterable):
     yield best
 
 
-def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
-  permutationmode = kwargs.pop("permutationmode", "best")
+def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutationmode="best", **kwargs):
   assert permutationmode in ("best", "asneeded")
 
   xand1 = "1"+getnvariableletters(n)
@@ -551,6 +550,12 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, **kwargs):
       "asneeded": True,
     }[permutationmode]:
       break
+
+  if best is None:
+    if "cmdlinestotry" not in kwargs:
+      kwargs["cmdlinestotry"] = "smallparalleltdeg", "smallparallel", "easy"
+      return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
+    raise NoCriticalPointsError("Couldn't minimize polynomial under any permutation:\n{}".format(coeffs))
 
   permutation, permutationdict, result, figureofmerit = best
 
