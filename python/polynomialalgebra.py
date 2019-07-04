@@ -535,10 +535,11 @@ def permutations_differentonesfirst(iterable):
 
 
 def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutationmode="best", **kwargs):
-  assert permutationmode in ("best", "asneeded")
+  assert permutationmode in ("best", "asneeded", "best_gothroughall")
 
   xand1 = "1"+getnvariableletters(n)
   best = None
+  signs = {1: [], -1: [], 0: []}
   for permutation in permutations_differentonesfirst(xand1):
     permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
     try:
@@ -561,9 +562,11 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
 
     if debugprint: print "---------------------------------"
 
+    signs[np.sign(result.fun)].append(permutation)
     if {
       "best": result.fun > 0 or figureofmerit <= (0, 50),
       "asneeded": True,
+      "best_gothroughall": False,
     }[permutationmode]:
       break
 
@@ -574,6 +577,8 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
     raise NoCriticalPointsError("Couldn't minimize polynomial under any permutation:\n{}".format(coeffs))
 
   permutation, permutationdict, result, figureofmerit = best
+
+  #import pprint; pprint.pprint(signs)
 
   return result
 
