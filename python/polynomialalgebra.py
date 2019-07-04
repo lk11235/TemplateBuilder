@@ -535,12 +535,12 @@ def permutations_differentonesfirst(iterable):
 
 
 def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutationmode="best", **kwargs):
-  assert permutationmode in ("best", "asneeded", "best_gothroughall")
-
   xand1 = "1"+getnvariableletters(n)
   best = None
   signs = {1: [], -1: [], 0: []}
+  variablesthathavebeenfirst = set()
   for permutation in permutations_differentonesfirst(xand1):
+    variablesthathavebeenfirst.add(permutation[0])
     permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
     try:
       result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
@@ -549,7 +549,7 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
 
     #want this to be small
     nonzerolinearconstraint = result.linearconstraint[np.nonzero(result.linearconstraint)]
-    figureofmerit = len(result.linearconstraint) - len(nonzerolinearconstraint), sum(np.log(abs(nonzerolinearconstraint))**2)
+    figureofmerit = (result.fun >= 0), len(result.linearconstraint) - len(nonzerolinearconstraint), sum(np.log(abs(nonzerolinearconstraint))**2)
 
     if debugprint:
       print "---------------------------------"
@@ -564,9 +564,10 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
 
     signs[np.sign(result.fun)].append(permutation)
     if {
-      "best": result.fun > 0 or figureofmerit <= (0, 50),
+      "best": result.fun > 0 or figureofmerit <= (False, 0, 50),
       "asneeded": True,
       "best_gothroughall": False,
+      "best_tryeachvariablefirst": variablesthathavebeenfirst == set(permutation),
     }[permutationmode]:
       break
 
@@ -584,6 +585,9 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
 
 def minimizepolynomialnd_permutationsasneeded(*args, **kwargs):
   return minimizepolynomialnd_permutations(*args, permutationmode="asneeded", **kwargs)
+
+def minimizepolynomialnd_permutations_tryeachvariablefirst(*args, **kwargs):
+  return minimizepolynomialnd_permutations(*args, permutationmode="best_tryeachvariablefirst", **kwargs)
 
 if __name__ == "__main__":
   coeffs = np.array([float(_) for _ in """

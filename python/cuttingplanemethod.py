@@ -7,7 +7,7 @@ import cvxpy as cp
 from scipy import optimize, special
 
 from optimizeresult import OptimizeResult
-from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizepolynomialnd_permutationsasneeded, minimizequadratic, minimizequartic
+from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, minimizepolynomialnd_permutation, minimizepolynomialnd_permutations, minimizepolynomialnd_permutations_tryeachvariablefirst, minimizepolynomialnd_permutationsasneeded, minimizequadratic, minimizequartic
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
@@ -361,6 +361,7 @@ class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
 class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
   def __init__(self, *args, **kwargs):
     self.__usepermutations = kwargs.pop("usepermutations", "asneeded")
+    print self.__usepermutations
     super(CuttingPlaneMethodMultiDimensional, self).__init__(*args, **kwargs)
 
   def minimizepolynomialfunction(self, *args, **kwargs):
@@ -371,6 +372,7 @@ class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
         True: minimizepolynomialnd_permutations,
         False: minimizepolynomialnd,
         "asneeded": minimizepolynomialnd_permutationsasneeded,
+        "tryeachvariablefirst": minimizepolynomialnd_permutations_tryeachvariablefirst,
       }[self.__usepermutations]
     return function(*args, **kwargs)
 
@@ -452,6 +454,10 @@ class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodMultiDimensionalSimple):
   nvariables = 4
 
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  def __init__(self, *args, **kwargs):
+    if "usepermutations" not in kwargs: kwargs["usepermutations"] = "tryeachvariablefirst"
+    super(CuttingPlaneMethod4DQuartic_4thVariableQuadratic, self).__init__(*args, **kwargs)
+
   expectedxsize = 65
   def insertzeroatindices():
     for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
@@ -470,6 +476,10 @@ class CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZ
   variableswithnoquarticterm = ()
 
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  def __init__(self, *args, **kwargs):
+    if "usepermutations" not in kwargs: kwargs["usepermutations"] = "tryeachvariablefirst"
+    super(CuttingPlaneMethod4DQuartic_4thVariableQuadratic, self).__init__(*args, **kwargs)
+
   expectedxsize = 42
   def insertzeroatindices():
     for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
