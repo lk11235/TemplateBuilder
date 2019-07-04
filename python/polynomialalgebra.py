@@ -273,12 +273,12 @@ def getpolynomialndgradient(d, n, coeffs):
       if coeff: derivative.append((coeff, xs))
   return derivatives
 
-def getpolynomialndgradientstrings(d, n, coeffs):
+def getpolynomialndgradientstrings(d, n, coeffs, homogenize=False):
   return [
     " + ".join(
       "*".join(
         itertools.chain(
-          (repr(coeff),), xs.elements()
+          (repr(coeff),), ["alpha" if homogenize and variable=="1" else variable for variable in xs.elements()]
         )
       ) for coeff, xs in derivative
     ) + ";" for derivative in getpolynomialndgradient(d, n, coeffs)
@@ -300,19 +300,45 @@ def findcriticalpointsquadraticnd(n, coeffs):
         row[variableletters.index(xs[0])] = coeff
   return np.linalg.solve(A, b).T
 
-def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True, cmdlinestotry=("smallparalleltdeg",)):
+def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True, cmdlinestotry=("smallparalleltdeg",), homogenizecoeffs=None, boundarycriticalpoints=[]):
   if usespecialcases and d == 2:
     return findcriticalpointsquadraticnd(n, coeffs)
-  stdin = "\n".join(["{"] + getpolynomialndgradientstrings(d, n, coeffs) + ["}"])
+
+  gradientstrings = getpolynomialndgradientstrings(d, n, coeffs, homogenize=homogenizecoeffs is not None)
+  if homogenizecoeffs is not None:
+    extraequations = [
+      "+".join("{:g}".format(coeff)+"*"+variable for coeff, variable in itertools.izip_longest(homogenizecoeffs, itertools.chain(["alpha"], getnvariableletters(n), ["1"]))) + ";"
+    ]
+  else:
+    extraequations = []
+  stdin = "\n".join(["{"] + gradientstrings + extraequations + ["}"])
 
   errors = []
   for cmdline in cmdlinestotry:
     try:
       result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
-    except (hom4pswrapper.Hom4PSFailedPathsError, hom4pswrapper.Hom4PSDivergentPathsError) as e:
+    except hom4pswrapper.Hom4PSFailedPathsError as e:
+      errors.append(e)
+    except hom4pswrapper.Hom4PSDivergentPathsError as e:
+      if homogenizecoeffs is None:
+        for cp in boundarycriticalpoints:
+          newhomogenizecoeffs = np.concatenate(([1, 1], 1/cp, [1]))
+          try:
+            homogenizedresult = findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=newhomogenizecoeffs)
+          except NoCriticalPointsError:
+            pass
+          else:
+            for solution in e.realsolutions:
+              if not any(np.allclose(solution, newsolution) for newsolution in homogenizedresult):
+                break
+            else: #all old solutions are still there after homogenizing
+              return homogenizedresult
       errors.append(e)
     else:
-      return result.realsolutions
+      solutions = result.realsolutions
+      if homogenizecoeffs is not None:
+        solutions = [solution[1:] / solution[0] for solution in solutions]
+      return solutions
 
   if verbose:
     print "seeing if those calls gave different solutions, in case between them we have them all covered"
@@ -337,26 +363,9 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
 
   if len(solutions) == numberofpossiblesolutions:
     if verbose: print "we do"
+    if homogenizecoeffs is not None:
+      solutions = [solution[1:] / solution[0] for solution in solutions]
     return solutions
-
-  """
-  #set the smallest coefficient (in abs) to 0 and see if that fixes the failed paths without ruining the previous solutions
-  #calls this function again, so can recursively set multiple coefficients to 0 if that's what it takes
-  if verbose: print "trying again after setting the smallest coefficient to 0 (recursively)"
-  newcoeffs = np.copy(coeffs)
-  smallest = min(_ for _ in abs(newcoeffs) if _ != 0)
-  if verbose: print "smallest coefficient:", smallest
-  newcoeffs[abs(newcoeffs)==smallest] = 0
-  newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases)
-  for oldsolution in solutions:
-    if verbose: print "checking if old solution {} is still here".format(oldsolution)
-    if not any(closebutnotequal(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
-      if verbose: print "it's not"
-      break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
-    if verbose: print "it is"
-  else:  #removing this coefficient didn't mess up the old solutions
-    return newsolutions
-  """
 
   raise NoCriticalPointsError(coeffs, moremessage="there are failed and/or divergent paths, even after trying different configurations and saving mechanisms", solutions=solutions)
 
@@ -401,7 +410,10 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
   #check the behavior around the sphere at infinity
   boundarycoeffs, boundarymonomials = zip(*getboundarymonomials(d, n, coeffs))
   boundarycoeffs = np.array(boundarycoeffs)
-  boundaryresult = minimizepolynomialnd(d, n-1, boundarycoeffs, verbose=verbose, **kwargs)
+  boundarykwargs = kwargs.copy()
+  if kwargs.get("homogenizecoeffs") is not None:
+    boundarykwargs["homogenizecoeffs"] = kwargs["homogenizecoeffs"][1:]
+  boundaryresult = minimizepolynomialnd(d, n-1, boundarycoeffs, verbose=verbose, **boundarykwargs)
   if boundaryresult.fun < 0:
     x = np.concatenate(([1], boundaryresult.x))
     multiply = 1
@@ -435,17 +447,17 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
       boundaryresult=boundaryresult,
     )
 
+  assert "boundarycriticalpoints" not in kwargs
+  if hasattr(boundaryresult, "criticalpoints"):
+    kwargs["boundarycriticalpoints"] = boundaryresult.criticalpoints
+
   criticalpoints = list(findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, **kwargs))
-  minimum = float("inf")
-  minimumx = None
-  for cp in criticalpoints:
-    value = polynomial(cp)
-    if verbose: print cp, value
-    if value < minimum:
-      minimum = value
-      minimumx = cp
-  if minimumx is None:
+  if not criticalpoints:
     raise NoCriticalPointsError(coeffs, moremessage="system of polynomials doesn't have any critical points")
+
+  criticalpoints.sort(key=polynomial)
+  minimumx = criticalpoints[0]
+  minimum = polynomial(minimumx)
 
   linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
   if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-4):
@@ -459,6 +471,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     fun=minimum,
     linearconstraint=linearconstraint,
     boundaryresult=boundaryresult,
+    criticalpoints=criticalpoints,
   )
 
 def coeffswithpermutedvariables(d, n, coeffs, permutationdict):
