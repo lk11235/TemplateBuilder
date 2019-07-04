@@ -456,6 +456,9 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
     raise NoCriticalPointsError(coeffs, moremessage="system of polynomials doesn't have any critical points")
 
   criticalpoints.sort(key=polynomial)
+  if verbose:
+    for cp in criticalpoints:
+      print cp, polynomial(cp)
   minimumx = criticalpoints[0]
   minimum = polynomial(minimumx)
 
