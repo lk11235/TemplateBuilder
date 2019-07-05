@@ -353,7 +353,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     print "seeing if those calls gave different solutions, in case between them we have them all covered"
 
   solutions = []
-  allclosekwargs = {"rtol": 1e-5, "atol": 1e-08}  #defaults from numpy
+  allclosekwargs = {"rtol": 1e-3, "atol": 1e-08}
   for error in errors:
     thesesolutions = error.realsolutions
 
@@ -394,7 +394,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
       newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=homogenizecoeffs, boundarycriticalpoints=boundarycriticalpoints)
       for oldsolution in solutions:
         if verbose: print "checking if old solution {} is still here".format(oldsolution)
-        if not any(closebutnotequal(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
+        if not any(np.allclose(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
           if verbose: print "it's not"
           break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
         if verbose: print "it is"
