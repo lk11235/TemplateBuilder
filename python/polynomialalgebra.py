@@ -322,7 +322,11 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     except hom4pswrapper.Hom4PSDivergentPathsError as e:
       if homogenizecoeffs is None:
         for cp in boundarycriticalpoints:
-          newhomogenizecoeffs = np.concatenate(([1, 1], 1/cp, [1]))
+          try:
+            newhomogenizecoeffs = np.concatenate(([1, 1], 1/cp, [1]))
+          except RuntimeWarning as runtimewarning:
+            if "divide by zero encountered in true_divide" in runtimewarning:
+              continue #can't use this cp
           try:
             homogenizedresult = findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=newhomogenizecoeffs)
           except NoCriticalPointsError:

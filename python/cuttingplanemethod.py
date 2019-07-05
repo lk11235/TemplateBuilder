@@ -478,7 +478,7 @@ class CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZ
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
   def __init__(self, *args, **kwargs):
     if "usepermutations" not in kwargs: kwargs["usepermutations"] = "tryeachvariablefirst"
-    super(CuttingPlaneMethod4DQuartic_4thVariableQuadratic, self).__init__(*args, **kwargs)
+    super(CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven, self).__init__(*args, **kwargs)
 
   expectedxsize = 42
   def insertzeroatindices():
