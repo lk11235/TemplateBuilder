@@ -389,7 +389,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
         newcoeffs.append(0)
     newcoeffs = np.array(newcoeffs)
     setto0 = np.array(setto0)
-    if np.log(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))) < np.log(biggest / smallest) * 3/4: #if there's a big gap
+    if np.log10(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))) > np.log10(biggest / smallest) / 3: #if there's a big gap
       if verbose: print "trying again after setting the smallest coefficients to 0:\n{}".format(setto0)
       newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=homogenizecoeffs, boundarycriticalpoints=boundarycriticalpoints)
       for oldsolution in solutions:
@@ -400,6 +400,8 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
         if verbose: print "it is"
       else:  #removing this coefficient didn't mess up the old solutions
         return newsolutions
+    else:
+      if verbose: print "can't set the smallest coefficients to 0, there's not a clear separation between big and small:\nbig candidates:{} --> range = {} - {}\nsmall candidates: {} --> range = {} - {}\n\nmore info: {} {}".format(newcoeffs[np.nonzero(newcoeffs)], min(abs(newcoeffs[np.nonzero(newcoeffs)])), max(abs(newcoeffs)), setto0, min(abs(setto0)), max(abs(setto0)), np.log10(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))), np.log10(biggest / smallest))
 
   raise NoCriticalPointsError(coeffs, moremessage="there are failed and/or divergent paths, even after trying different configurations and saving mechanisms", solutions=solutions)
 
