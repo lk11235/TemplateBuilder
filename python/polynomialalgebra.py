@@ -305,7 +305,7 @@ def findcriticalpointsquadraticnd(n, coeffs):
         row[variableletters.index(xs[0])] = coeff
   return np.linalg.solve(A, b).T
 
-def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True, cmdlinestotry=("smallparalleltdeg",), homogenizecoeffs=None, boundarycriticalpoints=[]):
+def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=True, cmdlinestotry=("smallparalleltdeg",), homogenizecoeffs=None, boundarycriticalpoints=[], setsmallestcoefficientsto0=False):
   if usespecialcases and d == 2:
     return findcriticalpointsquadraticnd(n, coeffs)
 
@@ -333,7 +333,7 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
             if "divide by zero encountered in true_divide" in runtimewarning:
               continue #can't use this cp
           try:
-            homogenizedresult = findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=newhomogenizecoeffs)
+            homogenizedresult = findcriticalpointspolynomialnd(d, n, coeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=newhomogenizecoeffs, setsmallestcoefficientsto0=setsmallestcoefficientsto0)
           except NoCriticalPointsError:
             pass
           else:
@@ -375,6 +375,31 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
     if homogenizecoeffs is not None:
       solutions = [solution[1:] / solution[0] for solution in solutions]
     return solutions
+
+  if setsmallestcoefficientsto0:
+    newcoeffs = []
+    setto0 = []
+    biggest = max(abs(coeffs))
+    smallest = min(abs(coeffs[np.nonzero(coeffs)]))
+    for coeff in coeffs:
+      if coeff == 0 or np.log(biggest / abs(coeff)) < np.log(abs(coeff) / smallest):
+        newcoeffs.append(coeff)
+      else:
+        setto0.append(coeff)
+        newcoeffs.append(0)
+    newcoeffs = np.array(newcoeffs)
+    setto0 = np.array(setto0)
+    if np.log(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))) < np.log(biggest / smallest) * 3/4: #if there's a big gap
+      if verbose: print "trying again after setting the smallest coefficients to 0:\n{}".format(setto0)
+      newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=homogenizecoeffs, boundarycriticalpoints=boundarycriticalpoints)
+      for oldsolution in solutions:
+        if verbose: print "checking if old solution {} is still here".format(oldsolution)
+        if not any(closebutnotequal(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
+          if verbose: print "it's not"
+          break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
+        if verbose: print "it is"
+      else:  #removing this coefficient didn't mess up the old solutions
+        return newsolutions
 
   raise NoCriticalPointsError(coeffs, moremessage="there are failed and/or divergent paths, even after trying different configurations and saving mechanisms", solutions=solutions)
 
@@ -472,7 +497,7 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
   minimum = polynomial(minimumx)
 
   linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
-  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-4):
+  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-2):
     raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), minimum))
 
   return OptimizeResult(
@@ -578,6 +603,9 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
       break
 
   if best is None:
+    if "setsmallestcoefficientsto0" not in kwargs:
+      kwargs["setsmallestcoefficientsto0"] = True
+      return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
     if "cmdlinestotry" not in kwargs:
       kwargs["cmdlinestotry"] = "smallparalleltdeg", "smallparallel", "easy"
       return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
