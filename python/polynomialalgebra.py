@@ -609,7 +609,7 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
       kwargs["setsmallestcoefficientsto0"] = True
       return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
     if "cmdlinestotry" not in kwargs:
-      kwargs["cmdlinestotry"] = "smallparalleltdeg", "smallparallel", "easy"
+      kwargs["cmdlinestotry"] = "smallparalleltdeg", "smallparallel"#, "easy"
       return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
     raise NoCriticalPointsError("Couldn't minimize polynomial under any permutation:\n{}".format(coeffs))
 
