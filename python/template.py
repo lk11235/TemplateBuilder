@@ -7,18 +7,27 @@ from collections import Counter
 import uncertainties
 
 from moremath import weightedaverage
+from templatecomponent import TemplateComponent
 
 class Template(object):
+  """
+  Structure:
+    A Template is the sum of multiple TemplateComponents.
+    Each TemplateComponent is made of one or more TemplateComponentPieces,
+    which are independent estimates of the TemplateComponent's bin content.
+    E.g. a VH Template could be made of ZH and WH TemplateComponents,
+    each of which is reweighted from a number of ZH or WH generated samples.
+  """
   def __init__(
     self, name, printprefix, trees,
     xformula, xbins, xmin, xmax,
     yformula, ybins, ymin, ymax,
     zformula, zbins, zmin, zmax,
-    cutformula, weightformula,
+    cutformula, weightformulas,
     mirrortype, scaleby, floor,
     reuseifexists=False,
   ):
-    filenames = [tree.filename for tree in trees]
+    filenames = [tree.filename for listoftrees in trees for tree in listoftrees]
     commonprefix = os.path.commonprefix(filenames)
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in filenames))[::-1]
     assert commonprefix + "plain" + commonsuffix not in filenames
@@ -62,26 +71,25 @@ class Template(object):
 
       self.__finalized = self.__didscale = self.__didcheckmirror = self.__didfloor = False
 
-    subdirectories = [
-      tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1]
-      for tree in trees
-    ]
-    assert "plain" not in subdirectories
-    for i, _ in enumerate(subdirectories):
-      if not _:
-        subdirectories[i] = "plain"
+    subdirectories = {
+      tree.filename: tree.filename.replace(commonprefix, "", 1)[::-1].replace(commonsuffix[::-1], "", 1)[::-1]
+      for listoftrees in trees for tree in listoftrees
+    }
+    assert "plain" not in subdirectories.values()
+    for k, v in subdirectories.items():
+      if not v:
+        subdirectories[k] = "plain"
 
-    self.__templatecomponenthandles = [
-      tree.registertemplatecomponent(
-        name+"_"+subdirectory, printprefix,
+    self.__templatecomponents = [
+      TemplateComponent(
+        name, listoftrees, [subdirectories[tree.filename] for tree in listoftrees],
+        printprefix,
         xformula, xbins, xmin, xmax,
         yformula, ybins, ymin, ymax,
         zformula, zbins, zmin, zmax,
         cutformula, weightformula,
         mirrortype, scaleby,
-        subdirectory=subdirectory,
-      )
-      for i, (tree, subdirectory) in enumerate(itertools.izip(trees, subdirectories))
+      ) for listoftrees, weightformula in itertools.izip_longest(trees, weightformulas)
     ]
 
   @property
@@ -176,4 +184,4 @@ class Template(object):
 
   @property
   def templatecomponents(self):
-    return [handle() for handle in self.__templatecomponenthandles]
+    return self.__templatecomponents

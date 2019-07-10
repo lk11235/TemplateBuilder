@@ -1,7 +1,7 @@
 import re
 
 from fileio import RootCd, RootFile
-from templatecomponent import TemplateComponent
+from templatecomponentpiece import TemplateComponentPiece
 
 class Tree(object):
   def __init__(self, filename, treename, debug=False, verbose=False):
@@ -11,9 +11,9 @@ class Tree(object):
     self.__verbose = verbose
     self.__entered = False
     self.__iterated = False
-    self.__templatecomponentargs = []
-    self.__templatecomponents = []
-    self.__templatecomponentstofill = []
+    self.__templatecomponentpieceargs = []
+    self.__templatecomponentpieces = []
+    self.__templatecomponentpiecestofill = []
 
   @property
   def filename(self): return self.__filename
@@ -29,17 +29,17 @@ class Tree(object):
     self.__entered = True
     self.__t.SetBranchStatus("*", 0)
 
-    for args, kwargs in self.__templatecomponentargs:
-      self.maketemplatecomponent(*args, **kwargs)
+    for args, kwargs in self.__templatecomponentpieceargs:
+      self.maketemplatecomponentpiece(*args, **kwargs)
 
     return self
 
   def __exit__(self, *errorstuff):
     self.__f.__exit__(*errorstuff)
 
-  def registertemplatecomponent(self, *args, **kwargs):
+  def registertemplatecomponentpiece(self, *args, **kwargs):
     if self.__entered:
-      raise RuntimeError("Can't add a template component after entering the tree")
+      raise RuntimeError("Can't add a template component piece after entering the tree")
 
     import ROOT
 
@@ -49,11 +49,11 @@ class Tree(object):
       subdir = ROOT.gDirectory.mkdir(subdirname)
     assert subdir
     kwargs["directory"] = subdir
-    self.__templatecomponentargs.append((args, kwargs))
-    index = len(self.__templatecomponentargs)-1
-    return lambda: self.__templatecomponents[index]
+    self.__templatecomponentpieceargs.append((args, kwargs))
+    index = len(self.__templatecomponentpieceargs)-1
+    return lambda: self.__templatecomponentpieces[index]
 
-  def maketemplatecomponent(
+  def maketemplatecomponentpiece(
     self, name, printprefix,
     xformula, xbins, xmin, xmax,
     yformula, ybins, ymin, ymax,
@@ -74,7 +74,7 @@ class Tree(object):
             raise ValueError("Bad branch "+branch+" in "+str(self))
 
     with RootCd(directory):
-      tc = TemplateComponent(
+      tc = TemplateComponentPiece(
         name, printprefix,
         ROOT.TTreeFormula(name+"_x", xformula, self.__t), xbins, xmin, xmax,
         ROOT.TTreeFormula(name+"_y", yformula, self.__t), ybins, ymin, ymax,
@@ -83,9 +83,9 @@ class Tree(object):
         ROOT.TTreeFormula(name+"_weight", weightformula, self.__t),
         mirrortype, scaleby,
       )
-      self.__templatecomponents.append(tc)
+      self.__templatecomponentpieces.append(tc)
       if not tc.locked:
-        self.__templatecomponentstofill.append(tc)
+        self.__templatecomponentpiecestofill.append(tc)
 
   def __str__(self):
     return "{}:{}".format(self.__filename, self.__treename)
@@ -101,7 +101,7 @@ class Tree(object):
     if self.__iterated:
       raise ValueError("Already iterated through {}".format(self))
     self.__iterated = True
-    if not self.__templatecomponentstofill: return
+    if not self.__templatecomponentpiecestofill: return
 
     print "Iterating through {} ({} entries)".format(self, self.__t.GetEntries())
 
@@ -115,17 +115,17 @@ class Tree(object):
     print
     if self.__verbose:
       print "Filling:"
-      for _ in self.__templatecomponentstofill:
+      for _ in self.__templatecomponentpiecestofill:
          print "  {:40} {:45}".format(_.printprefix, _.name)
       print
     else:
-      print "Filling", len(self.__templatecomponentstofill), "templates"
+      print "Filling", len(self.__templatecomponentpiecestofill), "templates"
     for entry in self:
-      for _ in self.__templatecomponentstofill:
+      for _ in self.__templatecomponentpiecestofill:
         _.fill()
     if self.__verbose:
       print
       print "Integrals:"
-      for _ in self.__templatecomponents:
+      for _ in self.__templatecomponentpieces:
         print "  {:40} {:45} {:10.3e}".format(_.printprefix, _.name, _.integral)
       print

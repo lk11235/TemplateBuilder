@@ -74,22 +74,28 @@ class ConstrainedTemplatesBase(object):
   def getcomponentbincontents(self, x, y, z):
       bincontents = []
 
-      for _ in self.templates:
-        thisonescontent = {}
-        bincontents.append(thisonescontent)
-        for component in _.templatecomponents:
-          thisonescontent[component.name.replace(_.name+"_", "")] = component.GetBinContentError(x, y, z)
+      for template in self.templates:
+        componentbincontents = []
+        bincontents.append(componentbincontents)
+        for component in template.templatecomponents:
+          thisonescontent = {}
+          componentbincontents.append(thisonescontent)
+          for piece in component.templatecomponentpieces:
+            thisonescontent[piece.name.replace(template.name+"_", "")] = piece.GetBinContentError(x, y, z)
 
       return bincontents
 
   def getcomponentbincontentsabs(self, x, y, z):
       bincontents = []
 
-      for _ in self.templates:
-        thisonescontent = {}
-        bincontents.append(thisonescontent)
-        for component in _.templatecomponents:
-          thisonescontent[component.name.replace(_.name+"_", "")] = component.GetBinContentErrorAbs(x, y, z)
+      for template in self.templates:
+        componentbincontents = []
+        bincontents.append(componentbincontents)
+        for component in template.templatecomponents:
+          thisonescontent = {}
+          componentbincontents.append(thisonescontent)
+          for piece in component.templatecomponentpieces:
+            thisonescontent[piece.name.replace(template.name+"_", "")] = piece.GetBinContentErrorAbs(x, y, z)
 
       return bincontents
 
@@ -100,9 +106,10 @@ class ConstrainedTemplatesBase(object):
 
   def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
     if all(_.alreadyexists for _ in self.templates):
-      for _ in self.templates:
-        for component in _.templatecomponents:
-          component.lock()
+      for template in self.templates:
+        for component in template.templatecomponents:
+          for piece in component.templatecomponentpieces:
+            piece.lock()
       return
     assert not any(_.alreadyexists for _ in self.templates)
 
@@ -116,23 +123,61 @@ class ConstrainedTemplatesBase(object):
     printedbins = []
     warnings = []
 
-    for _ in self.templates:
-      for component in _.templatecomponents:
-        component.lock()
-        self.write("  {:45} {:10.3e}".format(component.name, component.integral))
+    for template in self.templates:
+      for component in template.templatecomponents:
+        for piece in component.templatecomponentpieces:
+          piece.lock()
+          self.write("  {:45} {:10.3e}".format(piece.name, piece.integral))
 
     for x, y, z in sorted(self.binsxyz, key=binsortkey):
       bincontents = self.getcomponentbincontents(x, y, z)
       bincontentsabs = self.getcomponentbincontentsabs(x, y, z)
+      originalbincontents = copy.deepcopy(bincontents)
 
-      assert len({frozenset(_) for _ in bincontents}) == 1  #they should all have the same keys
+      warning = []
+
+      for i, (componentbincontents, componentbincontentsabs, t) in enumerate(
+        itertools.izip_longest(
+          bincontents, bincontentsabs, self.templates
+        )
+      ):
+        for bincontent, bincontentabs in itertools.izip(componentbincontents, componentbincontentsabs):
+          outliers = self.findoutliers(bincontent, bincontentabs)
+          bincontent.update(outliers)
+          if outliers:
+            warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outliers)))
+
+      printmessage = ""
+      fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+      fmt2 = fmt1 + " (was +/-{:10.3e})"
+      fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
+      fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
+      for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, sum(bincontents, []), sum(originalbincontents, []), sum(bincontentsabs, []))):
+        printmessage += "\n"+t.name+":"
+        for name, content in sorted(thisonescontent.iteritems()):
+          fmt = {
+            (True, True): fmt1,
+            (False, True): fmt2,
+            (True, False): fmt3,
+            (False, False): fmt4,
+          }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
+          fmtargs = [name, content]
+          if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name].s)
+          if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
+          printmessage += "\n"+fmt.format(*fmtargs)
 
       try:
-        finalbincontents, printmessage, warning = self.computefinalbincontents(bincontents, bincontentsabs)
+        finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs)
+        if fitprintmessage: printmessage += "\n\n" + fitprintmessage.lstrip("\n")
+        warning += fitwarning
       except BaseException as e:
         print("Error when finding content for bin", x, y, z)
+        print(thingtoprint)
         if hasattr(e, "thingtoprint"): print(e.thingtoprint)
         raise
+
+      for name, content in itertools.izip(self.templatenames, finalbincontents):
+        printmessage += "\n\n"+fmt1.format("final "+name, content)
 
       for t, content in itertools.izip(self.templates, finalbincontents):
         t.SetBinContentError(x, y, z, content)
@@ -152,7 +197,7 @@ class ConstrainedTemplatesBase(object):
           warning = list(warning)
         warnings.append(
           "\n      ".join(
-            ["  {:3d} {:3d} {:3d}: (pure bin contents: {})".format(x, y, z, ", ".join(str(_) for _ in self.purebincontents(x, y, z)))]
+            ["  {:3d} {:3d} {:3d}:".format(x, y, z)]
             +warning
           )
         )
@@ -233,109 +278,64 @@ class OneTemplate(ConstrainedTemplatesBase):
   pureindices = 0,
 
   def computefinalbincontents(self, bincontents, bincontentsabs):
-    bincontent = bincontents[0].copy()
-    originalcontent = copy.deepcopy(bincontent)
-    bincontentabs = bincontentsabs[0].copy()
-    nbincontents = len(bincontent)
-
+    printmessage = ""
     warning = []
 
-    outliers = self.findoutliers(bincontent, bincontentabs)
-    bincontent.update(outliers)
-    if outliers:
-      warning.append("some errors have been inflated: " + ", ".join(sorted(outliers)))
+    finalbincontent = 0
+    #these will be the final estimates of the bin contents, with their errors
+    for i, (componentbincontents, componentbincontentsabs, t) in enumerate(
+      itertools.izip_longest(
+        bincontents, bincontentsabs, self.templates
+      )
+    ):
+      for bincontent, bincontentabs in itertools.izip_longest(componentbincontents, componentbincontentsabs):
+        if any(_.n for _ in bincontent.itervalues()):
+          finalbincontent += weightedaverage(bincontent.itervalues())
 
-    if all(_.n == _.s == 0 for _ in bincontent.itervalues()):  #special case, empty bin
-      finalbincontent = bincontent.values()[0]
-    else:                                                      #normal case
-      finalbincontent = weightedaverage(bincontent.itervalues())
-    thingtoprint = ""
-    fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
-    fmt2 = fmt1 + " (was +/-{:10.3e})"
-    fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
-    fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
-    for i, (name, content) in enumerate(bincontent.iteritems()):
-      fmt = {
-        (True, True): fmt1,
-        (False, True): fmt2,
-        (True, False): fmt3,
-        (False, False): fmt4,
-      }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
-      fmtargs = [name, content]
-      if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name].s)
-      if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
-      thingtoprint += "\n"+fmt.format(*fmtargs)
-
-    thingtoprint += "\n"+fmt1.format("final", finalbincontent)
-
-    return [finalbincontent], thingtoprint, warning
+    return [finalbincontent], printmessage, warning
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def computefinalbincontents(self, bincontents, bincontentsabs):
     warning = []
 
-    bincontents = copy.deepcopy(bincontents)
-    bincontentsabs = copy.deepcopy(bincontentsabs)
-    originalbincontents = copy.deepcopy(bincontents)
-    nbincontents = len(bincontents[0])
+    #Each template component piece produces a 3D probability distribution in (SM, int, BSM)
+    #can improve this by including correlations and/or by not approximating as Gaussian
 
-    #Each template component produces a 3D probability distribution in (SM, int, BSM)
-    #FIXME: include correlations and don't approximate as Gaussian
+    #want to put the constraint in the following form:
+    # likelihood = 1/2 x^T Q x + c^T x + r
 
-    x0 = [[] for t in self.templates]
-    sigma = [[] for t in self.templates]
+    contentswitherrors = [0 for t in self.templates]
+    #these will be the final estimates of the bin contents, with their errors
+    for i, (componentbincontents, componentbincontentsabs, t) in enumerate(
+      itertools.izip_longest(
+        bincontents, bincontentsabs, self.templates
+      )
+    ):
+      for bincontent, bincontentabs in itertools.izip_longest(componentbincontents, componentbincontentsabs):
+        if any(_.n for _ in bincontent.itervalues()):
+          contentswitherrors[i] += weightedaverage(bincontent.itervalues())
 
-    for bincontent, bincontentabs, t in itertools.izip(bincontents, bincontentsabs, self.templates):
-      outliers = self.findoutliers(bincontent, bincontentabs)
-      bincontent.update(outliers)
-      if outliers:
-        warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outliers)))
+    x0 = np.array([content.n for content in contentswitherrors])
+    sigma = np.array([content.s for content in contentswitherrors])
 
-    for name in bincontents[0]:
-      for thisonescontent, thisx0, thissigma in itertools.izip(bincontents, x0, sigma):
-        thisx0.append(thisonescontent[name].n)
-        thissigma.append(thisonescontent[name].s)
-
-    x0 = np.array(x0)
-    sigma = np.array(sigma)
-
-    thingtoprint = ""
-    fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
-    fmt2 = fmt1 + " (was +/-{:10.3e})"
-    fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
-    fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
-    for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
-      thingtoprint += "\n"+t.name+":"
-      for name, content in sorted(thisonescontent.iteritems()):
-        fmt = {
-          (True, True): fmt1,
-          (False, True): fmt2,
-          (True, False): fmt3,
-          (False, False): fmt4,
-        }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
-        fmtargs = [name, content]
-        if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name].s)
-        if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
-        thingtoprint += "\n"+fmt.format(*fmtargs)
-
-    if not np.any(np.nonzero(x0)):
+    if np.all(x0 == sigma == 0):
       finalbincontents = np.array([0]*self.ntemplates)
       fitprintmessage = "all templates have zero content for this bin"
-    elif all(len(_[np.nonzero(_)]) == 1 for _ in x0):
-      finalbincontents = [
-        _[np.nonzero(_)][0] for _ in x0
-      ]
-      fitprintmessage = "only one reweighted sample has events in this bin, using that directly"
     else:
-      cachekey = tuple(tuple(_) for _ in x0), tuple(tuple(_) for _ in sigma)
+      Q = 2 * np.diag(1 / sigma**2)
+      c = -2 * x0 / sigma**2
+      r = sum(x0**2 / sigma**2)
+
+      cachekey = tuple(x0), tuple(sigma)
       if all(t.mirrortype for t in self.templates):
         mirroredx0 = self.applymirrortoarray(x0)
-        mirroredcachekey = tuple(tuple(_) for _ in mirroredx0), tuple(tuple(_) for _ in sigma)
+        mirroredcachekey = tuple(mirroredx0), tuple(sigma)
       try:
         if cachekey not in self.__fitresultscache:
           fitresult = self.__fitresultscache[cachekey] = self.docuttingplanes(
-            x0,
-            sigma,
+            Q,
+            c,
+            r,
           )
           if all(t.mirrortype for t in self.templates):
             self.__fitresultscache[mirroredcachekey] = OptimizeResult(
@@ -364,11 +364,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         warning.append("fit converged in {0.nit} with NLL = {0.fun}".format(fitresult))
         warning.append(fitresult.message)
 
-    thingtoprint += "\n\n"+str(fitprintmessage)+"\n"
-    for name, content in itertools.izip(self.templatenames, finalbincontents):
-      thingtoprint += "\n"+fmt1.format("final "+name, content)
-
-    return finalbincontents, thingtoprint.lstrip("\n"), warning
+    return finalbincontents, fitprintmessage, warning
 
   def __init__(self, *args, **kwargs):
     super(ConstrainedTemplatesWithFit, self).__init__(*args, **kwargs)
@@ -493,21 +489,15 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
   )
   pureindices = 0, 35, 55, 65, 69
   def cuttingplanefunction(self, x0, sigma, *args, **kwargs):
-    if np.all(x0[self.gZ3indices,:] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
+    if np.all(x0[self.gZ3indices] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
       return cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs)
 
     elif max(
-      weightedaverage(
-        ufloat(x0ij, sigmaij)
-        for x0ij, sigmaij in itertools.izip(x0[i], sigma[i])
-      )
+      ufloat(x0[i], sigma[i])
       for i in range(self.ntemplates)
       if i in self.gZ3indices and i in self.pureindices
     ) / min(
-      weightedaverage(
-        ufloat(x0ij, sigmaij)
-        for x0ij, sigmaij in itertools.izip(x0[i], sigma[i])
-      )
+      ufloat(x0[i], sigma[i])
       for i in range(self.ntemplates)
       if i not in self.gZ3indices and i in self.pureindices
     ) < 1e-3:

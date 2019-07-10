@@ -6,6 +6,7 @@ import numbers
 import os
 import re
 
+import numpy as np
 import uncertainties
 
 from constrainedtemplates import ConstrainedTemplates
@@ -185,7 +186,9 @@ class JsonReader(JsonDictWithFormat):
               ),
             },
           ),
-          "files": UniformJsonListOf(JsonStr),
+          "files": UniformJsonListOf(
+            UniformJsonListOf(JsonStr),
+          ),
           "name": JsonStr,
           "postprocessing": UniformJsonListOf(
             JsonDictWithThisFormat(
@@ -208,12 +211,12 @@ class JsonReader(JsonDictWithFormat):
             "JsonTemplateVariablesConfig",
             format=[JsonStr, JsonStr, JsonStr],
           ),
-          "weight": JsonStr,
+          "weight": UniformJsonListOf(JsonStr),
         },
         defaultvalues = {
           "postprocessing": [],
           "selection": "1",
-          "weight": "1",
+          "weight": ["1"],
         },
       ),
     ),
@@ -245,8 +248,9 @@ class TemplateBuilder(object):
     treeargs = set()
     for config in self.__configs:
       for templateconfig in config["templates"]:
-        for filename in templateconfig["files"]:
-          treeargs.add((os.path.join(config["inputDirectory"], filename), templateconfig["tree"]))
+        for listoffilenames in templateconfig["files"]:
+          for filename in listoffilenames:
+            treeargs.add((os.path.join(config["inputDirectory"], filename), templateconfig["tree"]))
     alltrees = {Tree(*args, debug=self.__debug) for args in treeargs}
 
     outfilenames = [config["outputFile"] for config in self.__configs]
@@ -263,7 +267,7 @@ class TemplateBuilder(object):
     for outfilename, logfilename, donefilename in itertools.izip(outfilenames[:], logfilenames[:], donefilenames[:]):
       if os.path.exists(logfilename) and not os.path.exists(outfilename):
         os.remove(logfilename)
-      if os.path.exists(donefilename) and not os.path.exists(outfilename) or not self.__useexistingtemplates:
+      if os.path.exists(donefilename) and (not os.path.exists(outfilename) or not self.__useexistingtemplates):
         os.remove(donefilename)
 
       if os.path.exists(donefilename):
@@ -301,14 +305,17 @@ class TemplateBuilder(object):
                 floor = uncertainties.ufloat(postprocessing["floorvalue"], postprocessing.get("floorerror", 0))
 
             trees = [
-              tree for tree in alltrees
-                if tree.treename == templateconfig["tree"]
-                and tree.filename in [
-                  os.path.join(config["inputDirectory"], filename) for filename in templateconfig["files"]
-                ]
+              [
+                tree for tree in alltrees
+                  if tree.treename == templateconfig["tree"]
+                  and tree.filename in [
+                    os.path.join(config["inputDirectory"], filename) for filename in listoffilenames
+                  ]
+              ] for listoffilenames in templateconfig["files"]
             ]
 
-            assert len(trees) == len(templateconfig["files"]), (len(trees), len(templateconfig["files"]))
+            if len(templateconfig["weight"]) != len(trees):
+              raise ValueError("You've provided {} lists of filenames, but {} weights".format(len(trees), len(templateconfig["weight"])))
 
             template = Template(
               templateconfig["name"],
