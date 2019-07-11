@@ -128,7 +128,7 @@ class CuttingPlaneMethodBase(object):
     self.__minimize = cp.Minimize(self.__tominimize)
 
     self.__otherconstraints += [
-      self.__x[i]>=0 for i in self.maxpowerindices
+      self.__x[i]>=np.finfo(float).eps for i in self.maxpowerindices
     ]
 
   @property

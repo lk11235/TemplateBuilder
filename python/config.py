@@ -224,6 +224,7 @@ class JsonReader(JsonDictWithFormat):
 
   defaultvalues = {
     "constraints": [],
+    "inputDirectory": os.getcwd(),
   }
 
 class TemplateBuilder(object):
