@@ -4,7 +4,7 @@ import abc, copy, itertools, textwrap
 
 import numpy as np
 from scipy import optimize
-from uncertainties import ufloat
+from uncertainties import nominal_value, std_dev, ufloat
 
 from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic
 from moremath import kspoissongaussian, weightedaverage
@@ -172,8 +172,8 @@ class ConstrainedTemplatesBase(object):
         warning += fitwarning
       except BaseException as e:
         print("Error when finding content for bin", x, y, z)
-        print(thingtoprint)
-        if hasattr(e, "thingtoprint"): print(e.thingtoprint)
+        print(printmessage)
+        if hasattr(e, "printmessage"): print(e.printmessage)
         raise
 
       for name, content in itertools.izip(self.templatenames, finalbincontents):
@@ -315,45 +315,35 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if any(_.n for _ in bincontent.itervalues()):
           contentswitherrors[i] += weightedaverage(bincontent.itervalues())
 
-    x0 = np.array([content.n for content in contentswitherrors])
-    sigma = np.array([content.s for content in contentswitherrors])
+    x0 = np.array([nominal_value(content) for content in contentswitherrors])
+    sigma = np.array([std_dev(content) for content in contentswitherrors])
 
-    if np.all(x0 == sigma == 0):
+    if np.all(x0 == 0) and np.all(sigma == 0):
       finalbincontents = np.array([0]*self.ntemplates)
       fitprintmessage = "all templates have zero content for this bin"
     else:
-      Q = 2 * np.diag(1 / sigma**2)
-      c = -2 * x0 / sigma**2
-      r = sum(x0**2 / sigma**2)
-
       cachekey = tuple(x0), tuple(sigma)
       if all(t.mirrortype for t in self.templates):
         mirroredx0 = self.applymirrortoarray(x0)
         mirroredcachekey = tuple(mirroredx0), tuple(sigma)
-      try:
-        if cachekey not in self.__fitresultscache:
-          fitresult = self.__fitresultscache[cachekey] = self.docuttingplanes(
-            Q,
-            c,
-            r,
+      if cachekey not in self.__fitresultscache:
+        fitresult = self.__fitresultscache[cachekey] = self.docuttingplanes(
+          x0,
+          sigma,
+        )
+        if all(t.mirrortype for t in self.templates):
+          self.__fitresultscache[mirroredcachekey] = OptimizeResult(
+            x=self.applymirrortoarray(fitresult.x),
+            fun=fitresult.fun,
+            message="(mirrored) "+fitresult.message,
+            status=fitresult.status,
+            nit=fitresult.nit,
+            maxcv=fitresult.maxcv
           )
-          if all(t.mirrortype for t in self.templates):
-            self.__fitresultscache[mirroredcachekey] = OptimizeResult(
-              x=self.applymirrortoarray(fitresult.x),
-              fun=fitresult.fun,
-              message="(mirrored) "+fitresult.message,
-              status=fitresult.status,
-              nit=fitresult.nit,
-              maxcv=fitresult.maxcv
-            )
-        fitresult = self.__fitresultscache[cachekey]
+      fitresult = self.__fitresultscache[cachekey]
 
-        if fitresult.maxcv:
-          raise ValueError("Fit failed with constraint violation\n\n{}".format(fitresult))
-
-      except BaseException as e:
-        e.thingtoprint = thingtoprint
-        raise
+      if fitresult.maxcv:
+        raise ValueError("Fit failed with constraint violation\n\n{}".format(fitresult))
 
       finalbincontents = fitresult.x
 
@@ -489,7 +479,7 @@ class FourParameterVVH(ConstrainedTemplatesWithFit):
   )
   pureindices = 0, 35, 55, 65, 69
   def cuttingplanefunction(self, x0, sigma, *args, **kwargs):
-    if np.all(x0[self.gZ3indices] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
+    if np.all(x0[self.gZ3indices,] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
       return cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs)
 
     elif max(
