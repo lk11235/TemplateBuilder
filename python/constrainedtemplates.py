@@ -141,11 +141,13 @@ class ConstrainedTemplatesBase(object):
           bincontents, bincontentsabs, self.templates
         )
       ):
+        outlierwarning = []
         for bincontent, bincontentabs in itertools.izip(componentbincontents, componentbincontentsabs):
           outliers = self.findoutliers(bincontent, bincontentabs)
           bincontent.update(outliers)
-          if outliers:
-            warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outliers)))
+          outlierwarning += list(outliers)
+        if outlierwarning:
+          warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outlierwarning)))
 
       printmessage = ""
       fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
