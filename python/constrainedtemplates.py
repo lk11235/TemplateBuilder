@@ -11,7 +11,10 @@ from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
 from polynomialalgebra import NoCriticalPointsError
 
-class BadFitStatusException(Exception): pass
+class BadFitStatusException(Exception):
+  def __init__(self, fitresult):
+    self.fitresult = fitresult
+    super(BadFitStatusException, self).__init__("Fit returned with a status indicating failure:\n\n"+str(fitresult))
 
 def ConstrainedTemplates(constrainttype, *args, **kwargs):
   return {
@@ -71,6 +74,9 @@ class ConstrainedTemplatesBase(object):
     assert len(result) == 1
     return result.pop()
 
+  def isbinsmall(self, x, y, z):
+    return False
+
   def getcomponentbincontents(self, x, y, z):
       bincontents = []
 
@@ -98,6 +104,20 @@ class ConstrainedTemplatesBase(object):
             thisonescontent[piece.name.replace(template.name+"_", "")] = piece.GetBinContentErrorAbs(x, y, z)
 
       return bincontents
+
+  def getcomponentsumsofallweights(self):
+      sumofallweights = []
+
+      for template in self.templates:
+        componentsumofallweights = []
+        sumofallweights.append(componentsumofallweights)
+        for component in template.templatecomponents:
+          thisonescontent = {}
+          componentsumofallweights.append(thisonescontent)
+          for piece in component.templatecomponentpieces:
+            thisonescontent[piece.name.replace(template.name+"_", "")] = piece.sumofallweights
+
+      return sumofallweights
 
   def write(self, thing):
     print(thing)
@@ -154,22 +174,25 @@ class ConstrainedTemplatesBase(object):
       fmt2 = fmt1 + " (was +/-{:10.3e})"
       fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
       fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
-      for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, sum(bincontents, []), sum(originalbincontents, []), sum(bincontentsabs, []))):
+      for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
         printmessage += "\n"+t.name+":"
-        for name, content in sorted(thisonescontent.iteritems()):
-          fmt = {
-            (True, True): fmt1,
-            (False, True): fmt2,
-            (True, False): fmt3,
-            (False, False): fmt4,
-          }[content.n == originalcontent[name].n and content.s == originalcontent[name].s, i in self.pureindices]
-          fmtargs = [name, content]
-          if fmt in (fmt2, fmt4): fmtargs.append(originalcontent[name].s)
-          if fmt in (fmt3, fmt4): fmtargs.append(bincontentabs[name].n)
-          printmessage += "\n"+fmt.format(*fmtargs)
+        for componentcontent, componentoriginalcontent, componentbincontentabs in itertools.izip(thisonescontent, originalcontent, bincontentabs):
+          for name, content in sorted(componentcontent.iteritems()):
+            fmt = {
+              (True, True): fmt1,
+              (False, True): fmt2,
+              (True, False): fmt3,
+              (False, False): fmt4,
+            }[content.n == componentoriginalcontent[name].n and content.s == componentoriginalcontent[name].s, i in self.pureindices]
+            fmtargs = [name, content]
+            if fmt in (fmt2, fmt4): fmtargs.append(componentoriginalcontent[name].s)
+            if fmt in (fmt3, fmt4): fmtargs.append(componentbincontentabs[name].n)
+            printmessage += "\n"+fmt.format(*fmtargs)
+
+      issmall = self.isbinsmall(x, y, z)
 
       try:
-        finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs)
+        finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs, issmall=issmall)
         if fitprintmessage: printmessage += "\n\n" + fitprintmessage.lstrip("\n")
         warning += fitwarning
       except BaseException as e:
@@ -225,7 +248,7 @@ class ConstrainedTemplatesBase(object):
 
 
   @abc.abstractmethod
-  def computefinalbincontents(self, bincontents, bincontentsabs): pass
+  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False): pass
 
   def applymirrortoarray(self, array):
     if len(self.templates) != len(array):
@@ -279,7 +302,7 @@ class OneTemplate(ConstrainedTemplatesBase):
   templatenames = "",
   pureindices = 0,
 
-  def computefinalbincontents(self, bincontents, bincontentsabs):
+  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False):
     printmessage = ""
     warning = []
 
@@ -297,7 +320,7 @@ class OneTemplate(ConstrainedTemplatesBase):
     return [finalbincontent], printmessage, warning
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
-  def computefinalbincontents(self, bincontents, bincontentsabs):
+  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False):
     warning = []
 
     #Each template component piece produces a 3D probability distribution in (SM, int, BSM)
@@ -332,6 +355,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         fitresult = self.__fitresultscache[cachekey] = self.docuttingplanes(
           x0,
           sigma,
+          issmall=issmall
         )
         if all(t.mirrortype for t in self.templates):
           self.__fitresultscache[mirroredcachekey] = OptimizeResult(
@@ -373,16 +397,47 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     say if the cutting plane function has a usepermutations kwarg
     """
 
-  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=None):
+  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=None, issmall=False):
     if maxiter is None: maxiter = self.defaultmaxiter
+    if issmall: maxiter /= 2
     try:
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
-      if self.cuttingplanehaspermutations and result.status >= 3: raise BadFitStatusException
+      if result.status >= 3: raise BadFitStatusException(result)
       return result
     except BadFitStatusException as e:
+      if issmall:
+        return OptimizeResult(
+          failedresult=e.fitresult,
+          x=np.zeros(e.fitresult.x.shape),
+          success=True,
+          status=2,
+          nit=e.fitresult.nit,
+          maxcv=0,
+          message=e.fitresult.message+"\nThis is a small bin, so set the contents to 0 everywhere",
+        )
       if self.cuttingplanehaspermutations:
-        return self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
+        result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
+        if result.status >= 3: raise BadFitStatusException(result)
+        return result
       raise
+
+  def getapproxbincontent(self, x, y, z, index):
+    return 
+
+  def isbinsmall(self, x, y, z):
+    for index in self.pureindices:
+      bincontent = sum(
+        weightedaverage(templatecomponentbincontent.itervalues())
+        for templatecomponentbincontent in self.getcomponentbincontents(x, y, z)[index]
+      )
+      integral = sum(
+        weightedaverage(templatecomponentsumofallweights.itervalues())
+        for templatecomponentsumofallweights in self.getcomponentsumsofallweights()[index]
+      )
+      print(bincontent, integral), bincontent <= integral / 100000
+      if bincontent > integral / 100000:
+        return False
+    return True
 
   defaultmaxiter = 2000
 

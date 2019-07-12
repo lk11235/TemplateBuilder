@@ -32,15 +32,19 @@ class TemplateComponentPiece(object):
     self.__tdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
 
     nameabs = name+"_absweights"
+    nameallevents = name+"_allevents"
 
     hkey = self.__tdirectory.FindKey(name)
     habskey = self.__tdirectory.FindKey(nameabs)
+    halleventskey = self.__tdirectory.FindKey(nameallevents)
 
-    if hkey and habskey:
+    if hkey and habskey and halleventskey:
       self.__h = hkey.ReadObj()
       self.__habs = habskey.ReadObj()
+      self.__hallevents = halleventskey.ReadObj()
       self.__h.SetDirectory(0)
       self.__habs.SetDirectory(0)
+      self.__hallevents.SetDirectory(0)
       self.__locked = True
     else:
       self.__h = ROOT.TH3F(
@@ -57,8 +61,11 @@ class TemplateComponentPiece(object):
         zbins, zmin, zmax,
       )
 
+      self.__hallevents = ROOT.TH1F(nameallevents, nameallevents, 1, 0, 1)
+
       self.__h.SetDirectory(0)
       self.__habs.SetDirectory(0)
+      self.__hallevents.SetDirectory(0)
 
       self.__forcewithinlimitsx = functools.partial(
         self.forcewithinlimits,
@@ -105,26 +112,35 @@ class TemplateComponentPiece(object):
   def fill(self):
     if self.__locked:
       raise ValueError("Can't fill {} after it's locked".format(self))
+
+    weight = self.weight()
+    if self.__mirrortype is not None:
+      weight /= 2
+    weight *= self.__scaleby
+
+    if self.__mirrortype is not None:
+      sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
+      mirrorweight = sign*weight
+
+    self.__hallevents.Fill(0, weight + (mirrorweight if self.__mirrortype else 0))
+
+    if self.__mirrortype is not None:
+      sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
+      self.__hallevents.Fill(-weight)
+
     if self.passcut():
       binx = self.binx()
       biny = self.biny()
       binz = self.binz()
-      weight = self.weight()
 
       if biny == 0: biny += 1e-10
-
-      if self.__mirrortype is not None:
-        weight /= 2
-
-      weight *= self.__scaleby
 
       self.__h.Fill(binx, biny, binz, weight)
       self.__habs.Fill(binx, biny, binz, abs(weight))
 
       if self.__mirrortype is not None:
-        sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
-        self.__h.Fill(binx, -biny, binz, sign*weight)
-        self.__habs.Fill(binx, -biny, binz, abs(weight))
+        self.__h.Fill(binx, -biny, binz, mirrorweight)
+        self.__habs.Fill(binx, -biny, binz, abs(mirrorweight))
 
   @property
   def integral(self):
@@ -132,6 +148,11 @@ class TemplateComponentPiece(object):
     error = array.array("d", [0])
     nominal = self.__h.IntegralAndError(1, self.__h.GetNbinsX(), 1, self.__h.GetNbinsY(), 1, self.__h.GetNbinsZ(), error)
     return uncertainties.ufloat(nominal, error[0])
+
+  @property
+  def sumofallweights(self):
+    self.lock()
+    return uncertainties.ufloat(self.__hallevents.GetBinContent(1), self.__hallevents.GetBinError(1))
 
   def GetBinContentError(self, *args):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
@@ -162,6 +183,7 @@ class TemplateComponentPiece(object):
 
     self.__h.SetDirectory(self.__tdirectory)
     self.__habs.SetDirectory(self.__tdirectory)
+    self.__hallevents.SetDirectory(self.__tdirectory)
 
     self.__locked = True
 

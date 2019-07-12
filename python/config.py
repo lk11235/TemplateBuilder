@@ -351,7 +351,7 @@ class TemplateBuilder(object):
         with tree:
           tree.fillall()
 
-      for constraint in constraints:
+      for constraint in sorted(constraints, key=lambda x: x.ntemplates): #do the ones with fewer templates first because they're less likely to fail, so we won't have to remake their components if the later ones fail
         constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins, binsortkey=self.__binsortkey)
 
       for template in templates:
