@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 from uncertainties import nominal_value, std_dev, ufloat
 
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic
 from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
 from polynomialalgebra import NoCriticalPointsError
@@ -404,17 +404,31 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
       if result.status >= 3: raise BadFitStatusException(result)
       return result
-    except BadFitStatusException as e:
+    except (BadFitStatusException, NoCriticalPointsError) as e:
       if issmall:
-        return OptimizeResult(
-          failedresult=e.fitresult,
-          x=np.zeros(e.fitresult.x.shape),
+        result = OptimizeResult(
+          x=np.zeros(len(x0)),
           success=True,
           status=2,
-          nit=e.fitresult.nit,
           maxcv=0,
-          message=e.fitresult.message+"\nThis is a small bin, so set the contents to 0 everywhere",
+          fun="N/A"
         )
+        if isinstance(e, BadFitStatusException):
+          result.update(
+            failedresult=e.fitresult,
+            nit=e.fitresult.nit,
+            message=e.fitresult.message,
+          )
+        elif isinstance(e, NoCriticalPointsError):
+          result.update(
+            nit=-1,
+            message=str(e),
+          )
+        else:
+          assert False, e
+        result.message += "\nThis is a small bin, so set the contents to 0 everywhere"
+        return result
+
       if self.cuttingplanehaspermutations:
         result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
         if result.status >= 3: raise BadFitStatusException(result)
@@ -572,7 +586,24 @@ class FourParameterVVH_nog4int(ConstrainedTemplatesWithFit):
     index - sum(1 for i, name in enumerate(FourParameterVVH.templatenames) if i < index and ("gi1" in name or "gi3" in name))
     for index in FourParameterVVH.pureindices
   )
-  cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_1stvariableonlyeven)
+  def cuttingplanefunction(self, x0, sigma, *args, **kwargs):
+    if np.all(x0[self.gZ3indices,] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
+      return cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven(x0, sigma, *args, **kwargs)
+
+    elif max(
+      ufloat(x0[i], sigma[i])
+      for i in range(self.ntemplates)
+      if i in self.gZ3indices and i in self.pureindices
+    ) / min(
+      ufloat(x0[i], sigma[i])
+      for i in range(self.ntemplates)
+      if i not in self.gZ3indices and i in self.pureindices
+    ) < 1e-3:
+      return cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven(x0, sigma, *args, **kwargs)
+
+    else:
+      return cuttingplanemethod4dquartic_1stvariableonlyeven(x0, sigma, *args, **kwargs)
+  gZ3indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _ or _ == "l")
   cuttingplanehaspermutations = True
 
 class FourParameterWWH_nog4int(ConstrainedTemplatesWithFit):

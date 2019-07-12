@@ -542,6 +542,52 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingP
       return multiplyothercoeffs * othercoeffs
     return modifyothercoeffs,
 
+class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_1stVariableOnlyEven_Step2(CuttingPlaneMethodMultiDimensional):
+  z34indices = [i for i, monomial in enumerate(m for m in getpolynomialndmonomials(4, 4) if m["w"]%2==0) if monomial["z"] >= 3]
+  xsize = 4
+  def constantindex(self, minimizepolynomialresult): return None
+  assert len(z34indices) == xsize
+
+  useconstraintindices = range(46)
+  monomials = list(m for m in getpolynomialndmonomials(4, 4) if m["w"]%2==0)
+  unusedmonomials = []
+  for _ in sorted(range(46), reverse=True):
+    if _ in z34indices: continue
+    assert useconstraintindices[_] == _
+    del useconstraintindices[_]
+    unusedmonomials.insert(0, monomials.pop(_))
+  del _
+
+  def evalconstraint(self, coeffs, othercoeffs):
+    coeffs = iter(coeffs)
+    othercoeffs = iter(othercoeffs)
+    newcoeffs = np.array([next(coeffs) if i in self.z34indices else next(othercoeffs) for i in xrange(46)])
+    for remaining in coeffs: assert False
+    for remaining in othercoeffs: assert False
+    return self.minimizepolynomialfunction(4, 4, newcoeffs)
+
+  @property
+  def maxpowerindices(self):
+    maxpowers = {
+      varname: max(monomial[varname] for monomial in self.monomials)
+        for varname in self.polynomialvariables
+        if varname == "z"
+    }
+    for v, p in maxpowers.iteritems():
+      if p%2: raise ValueError("max power of {} is odd: {}".format(v, p))
+    result = []
+    for i, monomial in enumerate(self.monomials):
+      if any(monomial[v] == p for v, p in maxpowers.iteritems()):
+        result.append(i)
+    return result
+
+  @classmethod
+  def modifymoreargs(cls):
+    def modifyothercoeffs(multiplyvariables, othercoeffs):
+      multiplyothercoeffs = 1/np.array([np.prod([multiplyvariables[variable] for variable in monomial.elements()]) for monomial in cls.unusedmonomials])
+      return multiplyothercoeffs * othercoeffs
+    return modifyothercoeffs,
+
 def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
 
@@ -551,6 +597,24 @@ def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args,
   sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
 
   result = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutz34, sigmawithoutz34, *args, **kwargs)
+
+  x = iter(result.x)
+  result.x = np.array([0 if i in z34indices else next(x) for i in xrange(len(x0))])
+  for remaining in x: assert False
+
+  result.message += " (4th variable is only quadratic)"
+
+  return result
+
+def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven(x0, sigma, *args, **kwargs):
+  z34indices = [i for i, monomial in enumerate(m for m in getpolynomialndmonomials(4, 4) if m["w"]%2==0) if monomial["z"] >= 3]
+
+  assert np.all(x0[z34indices] == 0)
+
+  x0withoutz34 = np.array([_ for i, _ in enumerate(x0) if i not in z34indices])
+  sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
+
+  result = cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven(x0withoutz34, sigmawithoutz34, *args, **kwargs)
 
   x = iter(result.x)
   result.x = np.array([0 if i in z34indices else next(x) for i in xrange(len(x0))])
@@ -593,6 +657,40 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args
 
 def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(*args, **kwargs).run()
+
+def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven(x0, sigma, *args, **kwargs):
+  z34indices = [i for i, monomial in enumerate(m for m in getpolynomialndmonomials(4, 4) if m["w"]%2==0) if monomial["z"] >= 3]
+
+  x0withoutz34 = np.array([_ for i, _ in enumerate(x0) if i not in z34indices])
+  sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
+  x0z34 = np.array([_ for i, _ in enumerate(x0) if i in z34indices])
+  sigmaz34 = np.array([_ for i, _ in enumerate(sigma) if i in z34indices])
+
+  result1 = cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven(x0withoutz34, sigmawithoutz34, *args, **kwargs)
+  result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,))
+
+  result = OptimizeResult({
+    k+"_step1": v for k, v in result1.iteritems()
+  })
+  result.update({
+    k+"_step2": v for k, v in result2.iteritems()
+  })
+  x1 = iter(result1.x)
+  x2 = iter(result2.x)
+  result.x = np.array([next(x2) if i in z34indices else next(x1) for i in xrange(len(x0))])
+  for remaining in x1: assert False
+  for remaining in x2: assert False
+
+  result.message = "4th variable is small beyond quadratic, 2 steps.\nFirst: {}\nSecond: {}".format(result1.message, result2.message)
+  result.nit = result1.nit + result2.nit
+  result.maxcv = result1.maxcv + result2.maxcv
+  result.fun = result1.fun + result2.fun
+  result.status = max(result1.status, result2.status)
+
+  return result
+
+def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven_step2(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_1stVariableOnlyEven_Step2(*args, **kwargs).run()
 
 if __name__ == "__main__":
   a = np.array([[1, 2.]]*70)
