@@ -57,6 +57,11 @@ class CuttingPlaneMethodBase(object):
     x = self.__x = cp.Variable(self.xsize)
     self.__t = None
 
+    self.__logger.info("x0:")
+    self.__logger.info(str(x0))
+    self.__logger.info("sigma:")
+    self.__logger.info(str(sigma))
+
     #===================================================================
     #simplest approach:
     #for x0column, sigmacolumn in itertools.izip(x0.T, sigma.T):
@@ -97,10 +102,6 @@ class CuttingPlaneMethodBase(object):
     #scale the coefficients according to how they multiply those variables.
     #This doesn't affect whether the polynomial ever goes negative.
 
-    self.__logger.info("x0:")
-    self.__logger.info(str(x0))
-    self.__logger.info("sigma:")
-    self.__logger.info(str(sigma))
     self.__logger.info("Q matrix:")
     self.__logger.info(str(np.diag(Q)))
     self.__logger.info("linear coefficients:")
@@ -361,7 +362,6 @@ class CuttingPlaneMethod1DQuartic(CuttingPlaneMethodBase):
 class CuttingPlaneMethodMultiDimensional(CuttingPlaneMethodBase):
   def __init__(self, *args, **kwargs):
     self.__usepermutations = kwargs.pop("usepermutations", "asneeded")
-    print self.__usepermutations
     super(CuttingPlaneMethodMultiDimensional, self).__init__(*args, **kwargs)
 
   def minimizepolynomialfunction(self, *args, **kwargs):
