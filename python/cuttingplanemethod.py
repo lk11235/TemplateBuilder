@@ -461,6 +461,15 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethod_Insert
   insertzeroatindices = list(insertzeroatindices())
   variableswithnoquarticterm = "z",
 
+class CuttingPlaneMethod4DQuartic_4thVariableNoCubic(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  expectedxsize = 66
+  def insertzeroatindices():
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
+      if variables["z"] == 3:
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = ()
+
 class CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
   expectedxsize = 46
   def insertzeroatindices():
@@ -479,6 +488,15 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(Cutti
   insertzeroatindices = list(insertzeroatindices())
   variableswithnoquarticterm = "z",
 
+class CuttingPlaneMethod4DQuartic_4thVariableNoCubic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  expectedxsize = 43
+  def insertzeroatindices():
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
+      if variables["w"] in (1, 3) or variables["z"] == 3:
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = ()
+
 def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod1dquartic(*args, **kwargs):
@@ -491,10 +509,14 @@ def cuttingplanemethod4dquartic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableQuadratic(*args, **kwargs).run()
+def cuttingplanemethod4dquartic_4thvariablenocubic(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_4thVariableNoCubic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_1stvariableonlyeven(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(*args, **kwargs).run()
+def cuttingplanemethod4dquartic_4thvariablenocubic_1stvariableonlyeven(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_4thVariableNoCubic_1stVariableOnlyEven(*args, **kwargs).run()
 
 class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_Step2(CuttingPlaneMethodMultiDimensional):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
@@ -620,7 +642,43 @@ def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyev
   result.x = np.array([0 if i in z34indices else next(x) for i in xrange(len(x0))])
   for remaining in x: assert False
 
-  result.message += " (4th variable is only quadratic)"
+  result.message += " (4th variable is only quadratic and 1st variable is only even)"
+
+  return result
+
+def cuttingplanemethod4dquartic_4thvariablezerocubic(x0, sigma, *args, **kwargs):
+  z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] == 3]
+
+  assert np.all(x0[z34indices] == 0)
+
+  x0withoutz34 = np.array([_ for i, _ in enumerate(x0) if i not in z34indices])
+  sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
+
+  result = cuttingplanemethod4dquartic_4thvariablenocubic(x0withoutz34, sigmawithoutz34, *args, **kwargs)
+
+  x = iter(result.x)
+  result.x = np.array([0 if i in z34indices else next(x) for i in xrange(len(x0))])
+  for remaining in x: assert False
+
+  result.message += " (4th variable has no cubic terms)"
+
+  return result
+
+def cuttingplanemethod4dquartic_4thvariablezerocubic_1stvariableonlyeven(x0, sigma, *args, **kwargs):
+  z34indices = [i for i, monomial in enumerate(m for m in getpolynomialndmonomials(4, 4) if m["w"]%2==0) and monomial["z"] == 3]
+
+  assert np.all(x0[z34indices] == 0)
+
+  x0withoutz34 = np.array([_ for i, _ in enumerate(x0) if i not in z34indices])
+  sigmawithoutz34 = np.array([_ for i, _ in enumerate(sigma) if i not in z34indices])
+
+  result = cuttingplanemethod4dquartic_4thvariablenocubic_1stvariableonlyeven(x0withoutz34, sigmawithoutz34, *args, **kwargs)
+
+  x = iter(result.x)
+  result.x = np.array([0 if i in z34indices else next(x) for i in xrange(len(x0))])
+  for remaining in x: assert False
+
+  result.message += " (4th variable has no cubic terms and 1st variable is only even)"
 
   return result
 
