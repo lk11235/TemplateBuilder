@@ -192,7 +192,7 @@ class ConstrainedTemplatesBase(object):
       issmall = self.isbinsmall(x, y, z)
 
       try:
-        finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs, issmall=issmall)
+        finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs, issmall=issmall, logprefix="{:3} {:3} {:3}".format(x, y, z))
         if fitprintmessage: printmessage += "\n\n" + fitprintmessage.lstrip("\n")
         warning += fitwarning
       except BaseException as e:
@@ -302,7 +302,7 @@ class OneTemplate(ConstrainedTemplatesBase):
   templatenames = "",
   pureindices = 0,
 
-  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False):
+  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False, logprefix=None):
     printmessage = ""
     warning = []
 
@@ -320,7 +320,7 @@ class OneTemplate(ConstrainedTemplatesBase):
     return [finalbincontent], printmessage, warning
 
 class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
-  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False):
+  def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False, logprefix=None):
     warning = []
 
     #Each template component piece produces a 3D probability distribution in (SM, int, BSM)
@@ -355,7 +355,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         fitresult = self.__fitresultscache[cachekey] = self.docuttingplanes(
           x0,
           sigma,
-          issmall=issmall
+          issmall=issmall,
+          logprefix=logprefix,
         )
         if all(t.mirrortype for t in self.templates):
           self.__fitresultscache[mirroredcachekey] = OptimizeResult(
@@ -397,7 +398,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
     say if the cutting plane function has a usepermutations kwarg
     """
 
-  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=None, issmall=False):
+  def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=None, issmall=False, **kwargs):
     if maxiter is None: maxiter = self.defaultmaxiter
     if issmall: maxiter /= 2
     if all(x0[i] == 0 for i in xrange(self.ntemplates) if i not in self.pureindices):
@@ -411,7 +412,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         message="all interference terms are 0",
       )
     try:
-      result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter)
+      result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, **kwargs)
       if result.status >= 3: raise BadFitStatusException(result)
       return result
     except (BadFitStatusException, NoCriticalPointsError) as e:
@@ -440,7 +441,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         return result
 
       if self.cuttingplanehaspermutations:
-        result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True)
+        result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True, **kwargs)
         if result.status >= 3: raise BadFitStatusException(result)
         return result
       raise

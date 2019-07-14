@@ -11,7 +11,7 @@ from polynomialalgebra import getpolynomialndmonomials, minimizepolynomialnd, mi
 
 class CuttingPlaneMethodBase(object):
   __metaclass__ = abc.ABCMeta
-  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printaswego=True, printlogaterror=True, moreargsforevalconstraint=(), maxiter=float("inf")):
+  def __init__(self, x0, sigma, maxfractionaladjustment=0, reportdeltafun=True, printaswego=True, printlogaterror=True, moreargsforevalconstraint=(), maxiter=float("inf"), logprefix=None):
     x0 = np.array(x0)
     sigma = np.array(sigma)
 
@@ -39,6 +39,7 @@ class CuttingPlaneMethodBase(object):
     self.__logger = logging.getLogger("cuttingplanemethod{}".format(random.randint(1, 10000)))
     self.__printlogaterror = printlogaterror
     self.__printaswego = printaswego
+
     if printaswego:
       self.__logstreamhandler = logging.StreamHandler()
       self.__logger.addHandler(self.__logstreamhandler)
@@ -49,6 +50,10 @@ class CuttingPlaneMethodBase(object):
       self.__logger.addHandler(self.__logstreamhandler)
       self.__logger.setLevel(logging.INFO)
 
+    if logprefix is not None:
+      formatter = logging.Formatter("\n"+logprefix.rstrip() + ":\n\n%(message)s")
+      self.__logstreamhandler.setFormatter(formatter)
+
     self.__initminimization(x0, sigma)
 
     self.__maxiter = maxiter
@@ -57,10 +62,7 @@ class CuttingPlaneMethodBase(object):
     x = self.__x = cp.Variable(self.xsize)
     self.__t = None
 
-    self.__logger.info("x0:")
-    self.__logger.info(str(x0))
-    self.__logger.info("sigma:")
-    self.__logger.info(str(sigma))
+    self.__logger.info("x0:\n"+str(x0)+"\nsigma:\n"+str(sigma))
 
     #===================================================================
     #simplest approach:
@@ -102,10 +104,7 @@ class CuttingPlaneMethodBase(object):
     #scale the coefficients according to how they multiply those variables.
     #This doesn't affect whether the polynomial ever goes negative.
 
-    self.__logger.info("Q matrix:")
-    self.__logger.info(str(np.diag(Q)))
-    self.__logger.info("linear coefficients:")
-    self.__logger.info(str(c))
+    self.__logger.info("Q matrix:\n"+str(np.diag(Q))+"\nlinear coefficients:\n"+str(c))
 
     multiplyvariables, multiplycoeffs = self.__findmultiplycoeffs(np.diag(Q) ** .5)
     self.__multiplycoeffs = multiplycoeffs
@@ -116,11 +115,7 @@ class CuttingPlaneMethodBase(object):
       f(multiplyvariables, arg) for f, arg in itertools.izip(self.modifymoreargs(), self.__moreargsforevalconstraint)
     )
 
-    self.__logger.info("Multiplied variables to get coefficients closer to 1 for minimization.")
-    self.__logger.info("Q matrix:")
-    self.__logger.info(str(np.diag(Q)))
-    self.__logger.info("linear coefficients:")
-    self.__logger.info(str(c))
+    self.__logger.info("Multiplied variables to get coefficients closer to 1 for minimization.\nQ matrix:\n"+str(np.diag(Q))+"\nlinear coefficients:\n"+str(c))
 
     t = self.__t = cp.Variable()
     self.__tominimize = 0.5 * cp.quad_form(x, Q) + cp.matmul(c, x)
@@ -217,9 +212,7 @@ class CuttingPlaneMethodBase(object):
       raise RuntimeError("Can't iterate, already finished")
 
     toprint = "starting iteration {}".format(len(self.__cuttingplanes)+1)
-    self.__logger.info("="*len(toprint))
-    self.__logger.info(toprint)
-    self.__logger.info("="*len(toprint))
+    self.__logger.info("="*len(toprint)+"\n"+toprint+"\n"+"="*len(toprint))
 
     prob = cp.Problem(
       self.__minimize,
@@ -269,8 +262,7 @@ class CuttingPlaneMethodBase(object):
       len(self.__cuttingplanes)+1 >= self.__maxiter
       #and constantindex is None
     ):
-      self.__logger.info("Minimum of the constraint polynomial is %g", minvalue)
-      self.__logger.info("Reached the max number of iterations %d", self.__maxiter)
+      self.__logger.info("Minimum of the constraint polynomial is %g\nReached the max number of iterations %d", minvalue, self.__maxiter)
       self.__results = OptimizeResult(
         x=x / self.__multiplycoeffs,
         success=True,
@@ -333,7 +325,6 @@ class CuttingPlaneMethodBase(object):
         return
 
     self.__logger.info("Minimum of the constraint polynomial is {} at {} --> adding a new constraint using this minimum:\n{}".format(minvalue, minimizepolynomial.x, minimizepolynomial.linearconstraint))
-    #self.__logger.info(str(minimizepolynomial))
     self.__cuttingplanes.append(
       cp.matmul(
         minimizepolynomial.linearconstraint[self.useconstraintindices,],
