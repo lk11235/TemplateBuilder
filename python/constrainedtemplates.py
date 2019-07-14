@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import abc, copy, itertools, textwrap
+import abc, copy, itertools, logging, textwrap
 
 import numpy as np
 from scipy import optimize
@@ -36,7 +36,12 @@ class ConstrainedTemplatesBase(object):
     self.__templates = templates
     if len(templates) != self.ntemplates:
       raise ValueError("Wrong number of templates ({}) for {}, should be {}".format(len(templates), type(self).__name__, self.ntemplates))
-    self.__logfile = logfile
+
+    self.__logger = logging.getLogger("constrainedtemplates"+templates[0].name)
+    self.__logger.addHandler(logging.StreamHandler())
+    if logfile is not None:
+      self.__logger.addHandler(logging.StreamHandler(logfile))
+    self.__logger.setLevel(logging.INFO)
 
   @property
   def templates(self): 
@@ -120,9 +125,7 @@ class ConstrainedTemplatesBase(object):
       return sumofallweights
 
   def write(self, thing):
-    print(thing)
-    if self.__logfile is not None:
-      self.__logfile.write(thing+"\n")
+    self.__logger.info(str(thing))
 
   def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
     if all(_.alreadyexists for _ in self.templates):
@@ -213,7 +216,7 @@ class ConstrainedTemplatesBase(object):
       if printallbins:
         self.write(printmessage)
       else:
-        print("  {:3d} {:3d} {:3d}".format(x, y, z))
+        self.write("  {:3d} {:3d} {:3d}".format(x, y, z))
 
       if warning or printallbins:
         if isinstance(warning, basestring):
@@ -459,7 +462,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         weightedaverage(templatecomponentsumofallweights.itervalues())
         for templatecomponentsumofallweights in self.getcomponentsumsofallweights()[index]
       )
-      print(bincontent, integral, bincontent <= integral / 50000)
       if bincontent > integral / 50000:
         return False
     return True
