@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import abc, copy, itertools, logging, textwrap
+import abc, copy, functools, itertools, logging, multiprocessing, textwrap, sys, traceback
 
 import numpy as np
 from scipy import optimize
@@ -37,11 +37,12 @@ class ConstrainedTemplatesBase(object):
     if len(templates) != self.ntemplates:
       raise ValueError("Wrong number of templates ({}) for {}, should be {}".format(len(templates), type(self).__name__, self.ntemplates))
 
-    self.__logger = logging.getLogger("constrainedtemplates"+templates[0].name)
-    self.__logger.addHandler(logging.StreamHandler())
+    self.__loggername = "constrainedtemplates"+templates[0].name
+    logger = logging.getLogger(self.__loggername)
+    logger.addHandler(logging.StreamHandler())
     if logfile is not None:
-      self.__logger.addHandler(logging.StreamHandler(logfile))
-    self.__logger.setLevel(logging.INFO)
+      logger.addHandler(logging.StreamHandler(logfile))
+    logger.setLevel(logging.INFO)
 
   @property
   def templates(self): 
@@ -125,7 +126,8 @@ class ConstrainedTemplatesBase(object):
       return sumofallweights
 
   def write(self, thing):
-    self.__logger.info(str(thing))
+    logger = logging.getLogger(self.__loggername)
+    logger.info(str(thing))
 
   def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
     if all(_.alreadyexists for _ in self.templates):
@@ -153,8 +155,19 @@ class ConstrainedTemplatesBase(object):
     warnings = {}
     finalbincontents = {}
 
-    for xyz in sorted(self.binsxyz, key=binsortkey):
-      finalbincontents[xyz], printmessage[xyz], warnings[xyz] = self.findbincontents(*xyz, printallbins=printallbins)
+    pool = multiprocessing.Pool()
+    mapargs = [[x, y, z] for x, y, z in sorted(self.binsxyz, key=binsortkey)]
+    selffindbincontentswrapper = functools.partial(findbincontentswrapper, self, printallbins=printallbins)
+
+    bkptemplates = self.__templates
+    self.__templates = [t.rootless for t in self.__templates]
+    import cPickle; cPickle.dumps(self.__templates[0])
+    import cPickle; cPickle.dumps(self)
+    mapresult = pool.map(selffindbincontentswrapper, mapargs)
+    self.__templates = bkptemplates
+
+    for xyz, findbincontentsresult in itertools.izip_longest(sorted(self.binsxyz, key=binsortkey), mapresult):
+      finalbincontents[xyz], printmessage[xyz], warnings[xyz] = findbincontentsresult
 
     for (x, y, z), bincontents in finalbincontents.iteritems():
       for t, content in itertools.izip(self.templates, bincontents):
@@ -168,7 +181,9 @@ class ConstrainedTemplatesBase(object):
     if warnings:
       self.write("")
       self.write("Warnings:")
-      for _ in warnings: self.write(_)
+      for xyz in self.binsxyz:
+        if warnings[xyz]:
+          self.write(warnings[xyz])
 
     for _ in self.templates:
       _.finalize()
@@ -316,9 +331,9 @@ class OneTemplate(ConstrainedTemplatesBase):
 
     finalbincontent = 0
     #these will be the final estimates of the bin contents, with their errors
-    for i, (componentbincontents, componentbincontentsabs, t) in enumerate(
+    for i, (componentbincontents, componentbincontentsabs) in enumerate(
       itertools.izip_longest(
-        bincontents, bincontentsabs, self.templates
+        bincontents, bincontentsabs
       )
     ):
       for bincontent, bincontentabs in itertools.izip_longest(componentbincontents, componentbincontentsabs):
@@ -637,3 +652,10 @@ class FourParameterWWH_nog4int(ConstrainedTemplatesWithFit):
   )
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven)
   cuttingplanehaspermutations = True
+
+def findbincontentswrapper(self, args, **kwargs):  #args without * is correct
+  try:
+    return self.findbincontents(*args, **kwargs)
+  except Exception as e:
+    #https://stackoverflow.com/a/16618842/5228524
+    raise Exception("".join(traceback.format_exception(*sys.exc_info())))

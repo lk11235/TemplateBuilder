@@ -1,6 +1,4 @@
-import array
-import itertools
-import os
+import abc, array, itertools, os
 
 from collections import Counter
 
@@ -9,7 +7,49 @@ import uncertainties
 from moremath import weightedaverage
 from templatecomponent import TemplateComponent
 
-class Template(object):
+class TemplateBase(object):
+  __metaclass__ = abc.ABCMeta
+
+  def __init__(self, name, printprefix, mirrortype, scaleby, floor, xbins, ybins, zbins, templatecomponents):
+    self.__name = name
+    self.__printprefix = printprefix
+    self.__mirrortype = mirrortype
+    self.__scaleby = scaleby
+    self.__floor = floor
+    self.__xbins = xbins
+    self.__ybins = ybins
+    self.__zbins = zbins
+    self.__templatecomponents = templatecomponents
+
+    if mirrortype not in (None, "symmetric", "antisymmetric"):
+      raise ValueError("invalid mirrortype {}: has to be None, symmetric, or antisymmetric".format(mirrortype))
+
+  @property
+  def name(self): return self.__name
+  @property
+  def printprefix(self): return self.__printprefix
+  @property
+  def mirrortype(self): return self.__mirrortype
+  @property
+  def scaleby(self): return self.__scaleby
+  @property
+  def floor(self): return self.__floor
+
+  @property
+  def xbins(self): return self.__xbins
+  @property
+  def ybins(self): return self.__ybins
+  @property
+  def zbins(self): return self.__zbins
+  @property
+  def binsxyz(self):
+    return itertools.product(xrange(1, self.xbins+1), xrange(1, self.ybins+1), xrange(1, self.zbins+1))
+
+  @property
+  def templatecomponents(self):
+    return self.__templatecomponents
+
+class Template(TemplateBase):
   """
   Structure:
     A Template is the sum of multiple TemplateComponents.
@@ -32,25 +72,11 @@ class Template(object):
     commonsuffix = os.path.commonprefix(list(_[::-1] for _ in filenames))[::-1]
     assert commonprefix + "plain" + commonsuffix not in filenames
 
-    self.__name = name
-    self.__printprefix = printprefix
+    if scaleby is None: scaleby = 1
 
     import ROOT
 
     self.__tdirectory = ROOT.gDirectory.GetDirectory(ROOT.gDirectory.GetPath())
-
-    self.__xbins = xbins
-    self.__ybins = ybins
-    self.__zbins = zbins
-
-    self.__mirrortype = mirrortype
-    if mirrortype not in (None, "symmetric", "antisymmetric"):
-      raise ValueError("invalid mirrortype {}: has to be None, symmetric, or antisymmetric".format(mirrortype))
-
-    if scaleby is None: scaleby = 1
-    self.__scaleby = scaleby
-
-    self.__floor = floor
 
     hkey = self.__tdirectory.FindKey(name)
     if reuseifexists and hkey:
@@ -80,7 +106,7 @@ class Template(object):
       if not v:
         subdirectories[k] = "plain"
 
-    self.__templatecomponents = [
+    templatecomponents = [
       TemplateComponent(
         name, listoftrees, [subdirectories[tree.filename] for tree in listoftrees],
         printprefix,
@@ -91,29 +117,7 @@ class Template(object):
         mirrortype, scaleby,
       ) for listoftrees, weightformula in itertools.izip_longest(trees, weightformulas)
     ]
-
-  @property
-  def name(self): return self.__name
-  @property
-  def printprefix(self): return self.__printprefix
-  @property
-  def mirrortype(self): return self.__mirrortype
-  @property
-  def scaleby(self): return self.__scaleby
-
-  @property
-  def xbins(self): return self.__xbins
-  @property
-  def ybins(self): return self.__ybins
-  @property
-  def zbins(self): return self.__zbins
-  @property
-  def binsxyz(self):
-    return itertools.product(xrange(1, self.xbins+1), xrange(1, self.ybins+1), xrange(1, self.zbins+1))
-
-  @property
-  def integral(self):
-    return sum(self.GetBinContentError(x, y, z) for x, y, z in self.binsxyz)
+    super(Template, self).__init__(name, printprefix, mirrortype, scaleby, floor, xbins, ybins, zbins, templatecomponents)
 
   def GetBinContentError(self, *args):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
@@ -124,6 +128,10 @@ class Template(object):
     self.__h.SetBinContent(*args[:-1]+(uncertainties.nominal_value(args[-1]),))
     self.__h.SetBinError(*args[:-1]+(uncertainties.std_dev(args[-1]),))
 
+  @property
+  def integral(self):
+    return sum(self.GetBinContentError(x, y, z) for x, y, z in self.binsxyz)
+
   def doscale(self):
     if self.__didscale: raise RuntimeError("Trying to scale twice!")
     self.__didscale = True
@@ -131,8 +139,8 @@ class Template(object):
   def checkmirror(self):
     if self.__didcheckmirror: raise RuntimeError("Trying to mirror twice!")
     self.__didcheckmirror = True
-    if self.__mirrortype is None: return
-    sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
+    if self.mirrortype is None: return
+    sign = {"symmetric": 1, "antisymmetric": -1}[self.mirrortype]
     for x, y, z in self.binsxyz:
       if y > self.ybins / 2: continue
       if (self.GetBinContentError(x, y, z).n, self.GetBinContentError(x, y, z).s) != (sign*self.GetBinContentError(x, self.ybins+1-y, z).n, self.GetBinContentError(x, self.ybins+1-y, z).s):
@@ -141,7 +149,7 @@ class Template(object):
   def dofloor(self):
     if self.__didfloor: raise RuntimeError("Trying to floor twice!")
     self.__didfloor = True
-    floor = self.__floor
+    floor = self.floor
     if floor is None: return
     if floor.nominal_value <= 0:
       raise ValueError("Invalid floor {}: has to be positive.".format(floor.nominal_value))
@@ -183,5 +191,11 @@ class Template(object):
     return self.__alreadyexists
 
   @property
-  def templatecomponents(self):
-    return self.__templatecomponents
+  def rootless(self):
+    kwargs = {thing: getattr(self, thing) for thing in ("name", "printprefix", "mirrortype", "scaleby", "floor", "xbins", "ybins", "zbins", "templatecomponents")}
+    return RootlessTemplate(**kwargs)
+
+class RootlessTemplate(TemplateBase):
+  def __init__(self, **kwargs):
+    kwargs["templatecomponents"] = [_.rootless for _ in kwargs["templatecomponents"]]
+    super(RootlessTemplate, self).__init__(**kwargs)

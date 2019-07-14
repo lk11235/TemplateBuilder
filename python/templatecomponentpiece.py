@@ -1,8 +1,4 @@
-import array
-import collections
-import functools
-import itertools
-import re
+import abc, array, collections, functools, itertools, re
 
 import numpy as np
 import uncertainties
@@ -11,7 +7,48 @@ import ROOT
 
 TreeVariable = collections.namedtuple("TreeVariable", "formula nbins min max")
 
-class TemplateComponentPiece(object):
+class TemplateComponentPieceBase(object):
+  def __init__(self, name, printprefix, mirrortype, scaleby, xbins, ybins, zbins):
+    self.__name = name
+    self.__printprefix = printprefix
+
+    self.__mirrortype = mirrortype
+    assert uncertainties.std_dev(scaleby) == 0
+    self.__scaleby = uncertainties.nominal_value(scaleby)
+
+    self.__xbins = xbins
+    self.__ybins = ybins
+    self.__zbins = zbins
+
+  @property
+  def name(self): return self.__name
+  @property
+  def printprefix(self): return self.__printprefix
+  @property
+  def mirrortype(self): return self.__mirrortype
+  @property
+  def scaleby(self): return self.__scaleby
+  @property
+  def floor(self): return self.__floor
+
+  @property
+  def xbins(self): return self.__xbins
+  @property
+  def ybins(self): return self.__ybins
+  @property
+  def zbins(self): return self.__zbins
+  @property
+  def binsxyz(self):
+    return itertools.product(xrange(1, self.xbins+1), xrange(1, self.ybins+1), xrange(1, self.zbins+1))
+
+  @abc.abstractproperty
+  def sumofallweights(self): pass
+  @abc.abstractmethod
+  def GetBinContentError(self, *args): pass
+  @abc.abstractmethod
+  def GetBinContentErrorAbs(self, *args): pass
+
+class TemplateComponentPiece(TemplateComponentPieceBase):
   def __init__(
     self, name, printprefix,
     xtreeformula, xbins, xmin, xmax,
@@ -20,8 +57,7 @@ class TemplateComponentPiece(object):
     cuttreeformula, weighttreeformula,
     mirrortype, scaleby,
   ):
-    self.__name = name
-    self.__printprefix = printprefix
+    super(TemplateComponentPiece, self).__init__(name, printprefix, mirrortype, scaleby, xbins, ybins, zbins)
 
     self.__xtreeformula = xtreeformula
     self.__ytreeformula = ytreeformula
@@ -84,15 +120,7 @@ class TemplateComponentPiece(object):
       )
       self.__locked = False
 
-    self.__xbins = xbins
-    self.__ybins = ybins
-    self.__zbins = zbins
-
-    self.__mirrortype = mirrortype
     if mirrortype is not None: assert ymin == -ymax and ybins%2 == 0
-
-    assert uncertainties.std_dev(scaleby) == 0
-    self.__scaleby = uncertainties.nominal_value(scaleby)
 
   @staticmethod
   def forcewithinlimits(lower, upper, value):
@@ -114,19 +142,15 @@ class TemplateComponentPiece(object):
       raise ValueError("Can't fill {} after it's locked".format(self))
 
     weight = self.weight()
-    if self.__mirrortype is not None:
+    if self.mirrortype is not None:
       weight /= 2
-    weight *= self.__scaleby
+    weight *= self.scaleby
 
-    if self.__mirrortype is not None:
-      sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
+    if self.mirrortype is not None:
+      sign = {"symmetric": 1, "antisymmetric": -1}[self.mirrortype]
       mirrorweight = sign*weight
 
-    self.__hallevents.Fill(0, weight + (mirrorweight if self.__mirrortype else 0))
-
-    if self.__mirrortype is not None:
-      sign = {"symmetric": 1, "antisymmetric": -1}[self.__mirrortype]
-      self.__hallevents.Fill(-weight)
+    self.__hallevents.Fill(0, weight + (mirrorweight if self.mirrortype else 0))
 
     if self.passcut():
       binx = self.binx()
@@ -138,7 +162,7 @@ class TemplateComponentPiece(object):
       self.__h.Fill(binx, biny, binz, weight)
       self.__habs.Fill(binx, biny, binz, abs(weight))
 
-      if self.__mirrortype is not None:
+      if self.mirrortype is not None:
         self.__h.Fill(binx, -biny, binz, mirrorweight)
         self.__habs.Fill(binx, -biny, binz, abs(mirrorweight))
 
@@ -158,10 +182,6 @@ class TemplateComponentPiece(object):
     return uncertainties.ufloat(self.__h.GetBinContent(*args), self.__h.GetBinError(*args))
   def GetBinContentErrorAbs(self, *args):
     return uncertainties.ufloat(self.__habs.GetBinContent(*args), self.__habs.GetBinError(*args))
-
-  @property
-  def binsxyz(self):
-    return itertools.product(xrange(1, self.__xbins+1), xrange(1, self.__ybins+1), xrange(1, self.__zbins+1))
 
   def lock(self):
     if self.__locked: return
@@ -188,11 +208,25 @@ class TemplateComponentPiece(object):
     self.__locked = True
 
   @property
-  def name(self):
-    return self.__name
-  @property
-  def printprefix(self):
-    return self.__printprefix
-  @property
   def locked(self):
     return self.__locked
+
+  @property
+  def rootless(self):
+    kwargs = {thing: getattr(self, thing) for thing in ("name", "printprefix", "mirrortype", "scaleby", "xbins", "ybins", "zbins")}
+    kwargs["sumofallweights"] = self.sumofallweights
+    kwargs["bincontents"] = {xyz: self.GetBinContentError(*xyz) for xyz in self.binsxyz}
+    kwargs["bincontentsabs"] = {xyz: self.GetBinContentErrorAbs(*xyz) for xyz in self.binsxyz}
+    return RootlessTemplateComponentPiece(**kwargs)
+
+class RootlessTemplateComponentPiece(TemplateComponentPieceBase):
+  def __init__(self, sumofallweights, bincontents, bincontentsabs, **kwargs):
+    self.__sumofallweights = sumofallweights
+    self.__bincontents = bincontents
+    self.__bincontentsabs = bincontentsabs
+    super(RootlessTemplateComponentPiece, self).__init__(**kwargs)
+  @property
+  def sumofallweights(self): return self.__sumofallweights
+  def GetBinContentError(self, *args): return self.__bincontents[args]
+  def GetBinContentErrorAbs(self, *args): return self.__bincontentsabs[args]
+

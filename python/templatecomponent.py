@@ -1,17 +1,12 @@
-import array
-import collections
-import functools
-import itertools
-import re
+import abc, itertools
 
-import numpy as np
-import uncertainties
+class TemplateComponentBase(object):
+  __metaclass__ = abc.ABCMeta
 
-import ROOT
+  @abc.abstractproperty
+  def templatecomponentpieces(self): pass
 
-TreeVariable = collections.namedtuple("TreeVariable", "formula nbins min max")
-
-class TemplateComponent(object):
+class TemplateComponent(TemplateComponentBase):
   def __init__(
     self, name, trees, subdirectories,
     printprefix,
@@ -37,3 +32,14 @@ class TemplateComponent(object):
   @property
   def templatecomponentpieces(self):
     return [handle() for handle in self.__templatecomponentpiecehandles]
+
+  @property
+  def rootless(self):
+    return RootlessTemplateComponent(self.templatecomponentpieces)
+
+class RootlessTemplateComponent(TemplateComponentBase):
+  def __init__(self, templatecomponentpieces):
+    self.__templatecomponentpieces = [_.rootless for _ in templatecomponentpieces]
+  @property
+  def templatecomponentpieces(self):
+    return self.__templatecomponentpieces
