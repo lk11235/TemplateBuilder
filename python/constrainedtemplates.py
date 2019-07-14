@@ -143,97 +143,27 @@ class ConstrainedTemplatesBase(object):
       self.write("  {:>10}: {:40} {:45}".format(name, _.printprefix, _.name))
     self.write("from individual templates with integrals:")
 
-    printedbins = []
-    warnings = []
-
     for template in self.templates:
       for component in template.templatecomponents:
         for piece in component.templatecomponentpieces:
           piece.lock()
           self.write("  {:45} {:10.3e}".format(piece.name, piece.integral))
 
-    for x, y, z in sorted(self.binsxyz, key=binsortkey):
-      bincontents = self.getcomponentbincontents(x, y, z)
-      bincontentsabs = self.getcomponentbincontentsabs(x, y, z)
-      originalbincontents = copy.deepcopy(bincontents)
+    printmessage = {}
+    warnings = {}
+    finalbincontents = {}
 
-      warning = []
+    for xyz in sorted(self.binsxyz, key=binsortkey):
+      finalbincontents[xyz], printmessage[xyz], warnings[xyz] = self.findbincontents(*xyz, printallbins=printallbins)
 
-      for i, (componentbincontents, componentbincontentsabs, t) in enumerate(
-        itertools.izip_longest(
-          bincontents, bincontentsabs, self.templates
-        )
-      ):
-        outlierwarning = []
-        for bincontent, bincontentabs in itertools.izip(componentbincontents, componentbincontentsabs):
-          outliers = self.findoutliers(bincontent, bincontentabs)
-          bincontent.update(outliers)
-          outlierwarning += list(outliers)
-        if outlierwarning:
-          warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outlierwarning)))
-
-      printmessage = ""
-      fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
-      fmt2 = fmt1 + " (was +/-{:10.3e})"
-      fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
-      fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
-      for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
-        printmessage += "\n"+t.name+":"
-        for componentcontent, componentoriginalcontent, componentbincontentabs in itertools.izip(thisonescontent, originalcontent, bincontentabs):
-          for name, content in sorted(componentcontent.iteritems()):
-            fmt = {
-              (True, True): fmt1,
-              (False, True): fmt2,
-              (True, False): fmt3,
-              (False, False): fmt4,
-            }[content.n == componentoriginalcontent[name].n and content.s == componentoriginalcontent[name].s, i in self.pureindices]
-            fmtargs = [name, content]
-            if fmt in (fmt2, fmt4): fmtargs.append(componentoriginalcontent[name].s)
-            if fmt in (fmt3, fmt4): fmtargs.append(componentbincontentabs[name].n)
-            printmessage += "\n"+fmt.format(*fmtargs)
-
-      issmall = self.isbinsmall(x, y, z)
-
-      try:
-        finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs, issmall=issmall, logprefix="{:3} {:3} {:3}".format(x, y, z))
-        if fitprintmessage: printmessage += "\n\n" + fitprintmessage.lstrip("\n")
-        warning += fitwarning
-      except BaseException as e:
-        print("Error when finding content for bin", x, y, z)
-        print(printmessage)
-        if hasattr(e, "printmessage"): print(e.printmessage)
-        raise
-
-      for name, content in itertools.izip(self.templatenames, finalbincontents):
-        printmessage += "\n\n"+fmt1.format("final "+name, content)
-
-      for t, content in itertools.izip(self.templates, finalbincontents):
+    for (x, y, z), bincontents in finalbincontents.iteritems():
+      for t, content in itertools.izip(self.templates, bincontents):
         t.SetBinContentError(x, y, z, content)
 
-      printmessage = "  {:3d} {:3d} {:3d}:\n".format(x, y, z) + printmessage
-      if (x, y, z) in printbins:
-        printedbins.append(printmessage)
-      if printallbins:
-        self.write(printmessage)
-      else:
-        self.write("  {:3d} {:3d} {:3d}".format(x, y, z))
-
-      if warning or printallbins:
-        if isinstance(warning, basestring):
-          warning = [warning]
-        else:
-          warning = list(warning)
-        warnings.append(
-          "\n      ".join(
-            ["  {:3d} {:3d} {:3d}:".format(x, y, z)]
-            +warning
-          )
-        )
-
-    if printedbins:
+    if printbins:
       self.write("")
       self.write("Bins you requested to print:")
-      for _ in printedbins: self.write(_)
+      for xyz in printbins: self.write(printmessage[xyz])
 
     if warnings:
       self.write("")
@@ -249,6 +179,81 @@ class ConstrainedTemplatesBase(object):
       self.write("  {:>10} = {:10.3e}".format(name, t.integral))
     self.write("")
 
+
+  def findbincontents(self, x, y, z, printallbins=False):
+    bincontents = self.getcomponentbincontents(x, y, z)
+    bincontentsabs = self.getcomponentbincontentsabs(x, y, z)
+    originalbincontents = copy.deepcopy(bincontents)
+
+    warning = []
+
+    for i, (componentbincontents, componentbincontentsabs, t) in enumerate(
+      itertools.izip_longest(
+        bincontents, bincontentsabs, self.templates
+      )
+    ):
+      outlierwarning = []
+      for bincontent, bincontentabs in itertools.izip(componentbincontents, componentbincontentsabs):
+        outliers = self.findoutliers(bincontent, bincontentabs)
+        bincontent.update(outliers)
+        outlierwarning += list(outliers)
+      if outlierwarning:
+        warning.append("some errors have been inflated for "+t.name+": "+", ".join(sorted(outlierwarning)))
+
+    printmessage = ""
+    fmt1 = "      {:<%d} {:10.3e}" % max(len(name) for name in bincontent)
+    fmt2 = fmt1 + " (was +/-{:10.3e})"
+    fmt3 = fmt1 + "                     (sum(abs(wt)) {:10.3e})"
+    fmt4 = fmt2 + " (sum(abs(wt)) {:10.3e})"
+    for i, (t, thisonescontent, originalcontent, bincontentabs) in enumerate(itertools.izip(self.templates, bincontents, originalbincontents, bincontentsabs)):
+      printmessage += "\n"+t.name+":"
+      for componentcontent, componentoriginalcontent, componentbincontentabs in itertools.izip(thisonescontent, originalcontent, bincontentabs):
+        for name, content in sorted(componentcontent.iteritems()):
+          fmt = {
+            (True, True): fmt1,
+            (False, True): fmt2,
+            (True, False): fmt3,
+            (False, False): fmt4,
+          }[content.n == componentoriginalcontent[name].n and content.s == componentoriginalcontent[name].s, i in self.pureindices]
+          fmtargs = [name, content]
+          if fmt in (fmt2, fmt4): fmtargs.append(componentoriginalcontent[name].s)
+          if fmt in (fmt3, fmt4): fmtargs.append(componentbincontentabs[name].n)
+          printmessage += "\n"+fmt.format(*fmtargs)
+
+    issmall = self.isbinsmall(x, y, z)
+
+    try:
+      finalbincontents, fitprintmessage, fitwarning = self.computefinalbincontents(bincontents, bincontentsabs, issmall=issmall, logprefix="{:3} {:3} {:3}".format(x, y, z))
+      if fitprintmessage: printmessage += "\n\n" + fitprintmessage.lstrip("\n")
+      warning += fitwarning
+    except BaseException as e:
+      print("Error when finding content for bin", x, y, z)
+      print(printmessage)
+      if hasattr(e, "printmessage"): print(e.printmessage)
+      raise
+
+    for name, content in itertools.izip(self.templatenames, finalbincontents):
+      printmessage += "\n\n"+fmt1.format("final "+name, content)
+
+    printmessage = "  {:3d} {:3d} {:3d}:\n".format(x, y, z) + printmessage
+    if printallbins:
+      self.write(printmessage)
+    else:
+      self.write("  {:3d} {:3d} {:3d}".format(x, y, z))
+
+    if warning or printallbins:
+      if isinstance(warning, basestring):
+        warning = [warning]
+      else:
+        warning = list(warning)
+      warning = (
+        "\n      ".join(
+          ["  {:3d} {:3d} {:3d}:".format(x, y, z)]
+          +warning
+        )
+      )
+
+    return finalbincontents, printmessage, warning
 
   @abc.abstractmethod
   def computefinalbincontents(self, bincontents, bincontentsabs, issmall=False): pass
@@ -448,9 +453,6 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         if result.status >= 3: raise BadFitStatusException(result)
         return result
       raise
-
-  def getapproxbincontent(self, x, y, z, index):
-    return 
 
   def isbinsmall(self, x, y, z):
     for index in self.pureindices:
