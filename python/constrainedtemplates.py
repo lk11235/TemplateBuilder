@@ -448,8 +448,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         weightedaverage(templatecomponentsumofallweights.itervalues())
         for templatecomponentsumofallweights in self.getcomponentsumsofallweights()[index]
       )
-      print(bincontent, integral), bincontent <= integral / 100000
-      if bincontent > integral / 100000:
+      print(bincontent, integral, bincontent <= integral / 50000)
+      if bincontent > integral / 50000:
         return False
     return True
 
