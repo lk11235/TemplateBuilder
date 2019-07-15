@@ -300,15 +300,16 @@ class CuttingPlaneMethodBase(object):
         assert adjustiter < 200
         adjustiter += 1
         lastconstant = x[constantindex]
+        lastminimum = minvalue
         #print minimizepolynomial
         #print x
-        #print minimizepolynomial.get("permutation", None), constantindex, x[constantindex], minvalue
+        print minimizepolynomial.get("permutation", None), constantindex, x[constantindex], minvalue
         #print
         #raw_input()
         x[constantindex] -= minvalue - multiplier*np.finfo(float).eps
-        if x[constantindex] == lastconstant: multiplier += 1
         minimizepolynomial = self.evalconstraint(x, **evalconstraintkwargs)
         minvalue = minimizepolynomial.fun
+        if x[constantindex] == lastconstant or lastminimum == minvalue: multiplier += 1
 
       if x[constantindex] / oldconstant - 1 < self.__maxfractionaladjustment:
         self.__logger.info("Multiply constant term by (1+%g) --> new minimum of the constraint polynomial is %g", x[constantindex] / oldconstant - 1, minvalue)
