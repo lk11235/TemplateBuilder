@@ -356,6 +356,8 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   allclosekwargs = {"rtol": 1e-3, "atol": 1e-08}
   for error in errors:
     thesesolutions = error.realsolutions
+    if homogenizecoeffs is not None:
+      thesesolutions = [solution[1:] / solution[0] for solution in thesesolutions]
 
     while any(closebutnotequal(first, second, **allclosekwargs) for first, second in itertools.combinations(thesesolutions, 2)):
       allclosekwargs["rtol"] /= 2
