@@ -15,7 +15,7 @@ if __name__ == "__main__":
   p.add_argument("--debug", action="store_true", help="only run 10000 events per tree.  files will be saved as (filename)_debug.root")
   g = p.add_mutually_exclusive_group()
   g.add_argument("--start-with-bin", type=int, nargs=3)
-  g.add_argument("--bin-sort-key", type=eval)
+  g.add_argument("--bin-sort-key", type=eval, default=lambda xyz: xyz)
   p.add_argument("--nthreads", type=int, default=1)
   args = p.parse_args()
 

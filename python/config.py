@@ -236,7 +236,7 @@ class TemplateBuilder(object):
     self.__debug = kwargs.pop("debug", False)
     self.__useexistingcomponents = kwargs.pop("useexistingcomponents", False)
     self.__useexistingtemplates = kwargs.pop("useexistingtemplates", False)
-    self.__binsortkey = kwargs.pop("binsortkey", None)
+    self.__binsortkey = kwargs.pop("binsortkey", lambda xyz: xyz)
     self.__nthreads = kwargs.pop("nthreads", 1)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))

@@ -129,7 +129,7 @@ class ConstrainedTemplatesBase(object):
     logger = logging.getLogger(self.__loggername)
     logger.info(str(thing))
 
-  def makefinaltemplates(self, printbins, printallbins, binsortkey=None, nthreads=1):
+  def makefinaltemplates(self, printbins, printallbins, binsortkey=lambda xyz: xyz, nthreads=1):
     if all(_.alreadyexists for _ in self.templates):
       for template in self.templates:
         for component in template.templatecomponents:
@@ -155,7 +155,26 @@ class ConstrainedTemplatesBase(object):
     warnings = {}
     finalbincontents = {}
 
-    xyzs = sorted(self.binsxyz, key=binsortkey)
+    def binsortkeywithmirror(xyz):
+      x, y, z = xyz
+      if not any(t.mirrortype for t in self.__templates):
+        return binsortkey(xyz)
+      if not all(t.mirrortype for t in self.__templates):
+        raise ValueError("Some templates are mirrored, some aren't")
+
+      thiskey = binsortkey(xyz)
+
+      mirrory = self.ybins - y + 1
+      mirrorxyz = x, mirrory, z
+      mirrorkey = binsortkey(mirrorxyz)
+
+      return (
+        min(thiskey, mirrorkey),   #do both xyz and mirrorxyz when the default sortkey would give the first of them
+        min(xyz, mirrorxyz),       #if there are multiple sets of xyz with the same key, make sure these two are next to each other
+        thiskey,                   #of xyz and mirrorxyz, choose the one with the smaller key first
+      )
+
+    xyzs = sorted(self.binsxyz, key=binsortkeywithmirror)
 
     if nthreads > 1:
       pool = multiprocessing.Pool(processes=nthreads)
@@ -164,7 +183,7 @@ class ConstrainedTemplatesBase(object):
 
       bkptemplates = self.__templates
       self.__templates = [t.rootless for t in self.__templates]
-      mapresult = pool.map(selffindbincontentswrapper, mapargs)
+      mapresult = pool.map(selffindbincontentswrapper, mapargs, chunksize=2)
       self.__templates = bkptemplates
 
       for xyz, findbincontentsresult in itertools.izip_longest(xyzs, mapresult):
