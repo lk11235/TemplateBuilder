@@ -64,10 +64,24 @@ class Hom4PSResult(object):
     super(Hom4PSResult, self).__init__(*self.superinitargs)
   @property
   def nfailedpaths(self):
-    return int(re.search(r"Failed Paths\s*:\s*([0-9]+)", self.stdout).group(1))
+    match = re.search(r"Failed Paths\s*:\s*([0-9]+)", self.stdout)
+    try:
+      return int(match.group(1))
+    except AttributeError:
+      print "-----------------------"
+      print self.stdout
+      print "-----------------------"
+      raise
   @property
   def ndivergentpaths(self):
-    return int(re.search(r"Divergent:\s*([0-9]+)", self.stdout).group(1))
+    match = re.search(r"Divergent:\s*([0-9]+)", self.stdout)
+    try:
+      return int(match.group(1))
+    except AttributeError:
+      print "-----------------------"
+      print self.stdout
+      print "-----------------------"
+      raise
   @property
   def solutions(self):
     result = []
