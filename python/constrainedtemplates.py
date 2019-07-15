@@ -447,7 +447,7 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
 
   def docuttingplanes(self, x0, sigma, maxfractionaladjustment=1e-6, maxiter=None, issmall=False, **kwargs):
     if maxiter is None: maxiter = self.defaultmaxiter
-    if issmall: maxiter /= 2
+    if issmall: maxiter /= 10
     if all(x0[i] == 0 for i in xrange(self.ntemplates) if i not in self.pureindices):
       return OptimizeResult(
         x=x0,
@@ -463,6 +463,8 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
       if result.status >= 3: raise BadFitStatusException(result)
       return result
     except (BadFitStatusException, NoCriticalPointsError) as e:
+      if isinstance(e, BadFitStatusException) and hasattr(e.fitresult, "error_step2"):  #then it's a 2 step fit and the first went fine
+        return e.fitresult
       if issmall:
         result = OptimizeResult(
           x=np.zeros(len(x0)),
@@ -488,9 +490,13 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
         return result
 
       if self.cuttingplanehaspermutations:
-        result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True, **kwargs)
-        if result.status >= 3: raise BadFitStatusException(result)
-        return result
+        try:
+          result = self.cuttingplanefunction(x0, sigma, maxfractionaladjustment=maxfractionaladjustment, maxiter=maxiter, usepermutations=True, **kwargs)
+          if result.status >= 3: raise BadFitStatusException(result)
+          return result
+        except BadFitStatusException as e:
+          if isinstance(e, BadFitStatusException) and hasattr(e.fitresult, "error_step2"):  #then it's a 2 step fit and the first went fine
+            return e.fitresult
       raise
 
   def isbinsmall(self, x, y, z):

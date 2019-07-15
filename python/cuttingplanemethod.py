@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import abc, collections, cStringIO, itertools, logging, random, sys, warnings
+import abc, collections, cStringIO, itertools, logging, multiprocessing, random, sys, warnings
 
 import numpy as np
 import cvxpy as cp
@@ -687,7 +687,25 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args
   sigmaz34 = np.array([_ for i, _ in enumerate(sigma) if i in z34indices])
 
   result1 = cuttingplanemethod4dquartic_4thvariablequadratic(x0withoutz34, sigmawithoutz34, *args, **kwargs)
-  result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,))
+  try:
+    if "maxiter" in kwargs:
+      kwargs["maxiter"] /= 10
+    result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,), **kwargs)
+  except Exception as e:
+    result = OptimizeResult({
+      k+"_step1": v for k, v in result1.iteritems(),
+    })
+    result.update({
+      k: v for k, v in result1.iteritems(),
+    })
+    result.update({
+      "error_step2": e,
+      status=5,  #overrides the one from result1.iteritems
+    })
+    x1 = iter(result1.x)
+    result.x = np.array([0 if i in z34indices else next(x1) for i in xrange(len(x0))])
+    for remaining in x1: assert False
+    return result
 
   result = OptimizeResult({
     k+"_step1": v for k, v in result1.iteritems()
@@ -721,7 +739,25 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlye
   sigmaz34 = np.array([_ for i, _ in enumerate(sigma) if i in z34indices])
 
   result1 = cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven(x0withoutz34, sigmawithoutz34, *args, **kwargs)
-  result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,))
+  try:
+    if "maxiter" in kwargs:
+      kwargs["maxiter"] /= 10
+    result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,), **kwargs)
+  except Exception as e:
+    result = OptimizeResult({
+      k+"_step1": v for k, v in result1.iteritems(),
+    })
+    result.update({
+      k: v for k, v in result1.iteritems(),
+    })
+    result.update({
+      "error_step2": e,
+      status=5,  #overrides the one from result1.iteritems
+    })
+    x1 = iter(result1.x)
+    result.x = np.array([0 if i in z34indices else next(x1) for i in xrange(len(x0))])
+    for remaining in x1: assert False
+    return result
 
   result = OptimizeResult({
     k+"_step1": v for k, v in result1.iteritems()
