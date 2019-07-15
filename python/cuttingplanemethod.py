@@ -303,7 +303,7 @@ class CuttingPlaneMethodBase(object):
         lastminimum = minvalue
         #print minimizepolynomial
         #print x
-        print minimizepolynomial.get("permutation", None), constantindex, x[constantindex], minvalue
+        #print minimizepolynomial.get("permutation", None), constantindex, x[constantindex], minvalue
         #print
         #raw_input()
         x[constantindex] -= minvalue - multiplier*np.finfo(float).eps
