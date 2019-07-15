@@ -51,7 +51,11 @@ class CuttingPlaneMethodBase(object):
       self.__logger.setLevel(logging.INFO)
 
     if logprefix is not None:
-      formatter = logging.Formatter("\n"+logprefix.rstrip() + ":\n\n%(message)s")
+      format = "\n" + logprefix.rstrip() + " - %(asctime)s"
+      if multiprocessing.current_process().name != "MainProcess":
+        format += " - "+multiprocessing.current_process().name
+      format += ":\n\n%(message)s"
+      formatter = logging.Formatter(format)
       self.__logstreamhandler.setFormatter(formatter)
 
     self.__initminimization(x0, sigma)
