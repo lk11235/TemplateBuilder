@@ -693,14 +693,14 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic(x0, sigma, *args
     result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,), **kwargs)
   except Exception as e:
     result = OptimizeResult({
-      k+"_step1": v for k, v in result1.iteritems(),
+      k+"_step1": v for k, v in result1.iteritems()
     })
     result.update({
-      k: v for k, v in result1.iteritems(),
+      k: v for k, v in result1.iteritems()
     })
     result.update({
       "error_step2": e,
-      status=5,  #overrides the one from result1.iteritems
+      "status": 5,  #overrides the one from result1.iteritems
     })
     x1 = iter(result1.x)
     result.x = np.array([0 if i in z34indices else next(x1) for i in xrange(len(x0))])
@@ -745,14 +745,14 @@ def cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlye
     result2 = cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven_step2(x0z34, sigmaz34, *args, moreargsforevalconstraint=(result1.x,), **kwargs)
   except Exception as e:
     result = OptimizeResult({
-      k+"_step1": v for k, v in result1.iteritems(),
+      k+"_step1": v for k, v in result1.iteritems()
     })
     result.update({
-      k: v for k, v in result1.iteritems(),
+      k: v for k, v in result1.iteritems()
     })
     result.update({
       "error_step2": e,
-      status=5,  #overrides the one from result1.iteritems
+      "status": 5,  #overrides the one from result1.iteritems
     })
     x1 = iter(result1.x)
     result.x = np.array([0 if i in z34indices else next(x1) for i in xrange(len(x0))])
