@@ -237,6 +237,7 @@ class TemplateBuilder(object):
     self.__useexistingcomponents = kwargs.pop("useexistingcomponents", False)
     self.__useexistingtemplates = kwargs.pop("useexistingtemplates", False)
     self.__binsortkey = kwargs.pop("binsortkey", None)
+    self.__nthreads = kwargs.pop("nthreads", 1)
     if kwargs:
       raise TypeError("Unknown kwargs: "+ ", ".join(kwargs))
     if self.__useexistingtemplates and not self.__useexistingcomponents:
@@ -357,7 +358,7 @@ class TemplateBuilder(object):
             piece.lock()
 
       for constraint in sorted(constraints, key=lambda x: x.ntemplates): #do the ones with fewer templates first because they're less likely to fail, so we won't have to remake their components if the later ones fail
-        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins, binsortkey=self.__binsortkey)
+        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins, binsortkey=self.__binsortkey, nthreads=self.__nthreads)
 
       for template in templates:
         if not template.finalized:

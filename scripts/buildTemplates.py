@@ -16,6 +16,7 @@ if __name__ == "__main__":
   g = p.add_mutually_exclusive_group()
   g.add_argument("--start-with-bin", type=int, nargs=3)
   g.add_argument("--bin-sort-key", type=eval)
+  p.add_argument("--nthreads", type=int, default=1)
   args = p.parse_args()
 
   if args.use_existing_templates: args.use_existing_components = True
@@ -28,4 +29,4 @@ if __name__ == "__main__":
   warnings.simplefilter("error")
   warnings.filterwarnings(action='ignore', category=RuntimeWarning, message=r'creating converter for unknown type "const char\*\[\]".*')
 
-  TemplateBuilder(*args.configfile, printbins=args.print_bin, printallbins=args.print_all_bins, force=args.force, useexistingcomponents=args.use_existing_components, useexistingtemplates=args.use_existing_templates, debug=args.debug, binsortkey=args.bin_sort_key).maketemplates()
+  TemplateBuilder(*args.configfile, printbins=args.print_bin, printallbins=args.print_all_bins, force=args.force, useexistingcomponents=args.use_existing_components, useexistingtemplates=args.use_existing_templates, debug=args.debug, binsortkey=args.bin_sort_key, nthreads=args.nthreads).maketemplates()

@@ -129,7 +129,7 @@ class ConstrainedTemplatesBase(object):
     logger = logging.getLogger(self.__loggername)
     logger.info(str(thing))
 
-  def makefinaltemplates(self, printbins, printallbins, binsortkey=None):
+  def makefinaltemplates(self, printbins, printallbins, binsortkey=None, nthreads=1):
     if all(_.alreadyexists for _ in self.templates):
       for template in self.templates:
         for component in template.templatecomponents:
@@ -155,19 +155,24 @@ class ConstrainedTemplatesBase(object):
     warnings = {}
     finalbincontents = {}
 
-    pool = multiprocessing.Pool()
-    mapargs = [[x, y, z] for x, y, z in sorted(self.binsxyz, key=binsortkey)]
-    selffindbincontentswrapper = functools.partial(findbincontentswrapper, self, printallbins=printallbins)
+    xyzs = sorted(self.binsxyz, key=binsortkey)
 
-    bkptemplates = self.__templates
-    self.__templates = [t.rootless for t in self.__templates]
-    import cPickle; cPickle.dumps(self.__templates[0])
-    import cPickle; cPickle.dumps(self)
-    mapresult = pool.map(selffindbincontentswrapper, mapargs)
-    self.__templates = bkptemplates
+    if nthreads > 1:
+      pool = multiprocessing.Pool(processes=nthreads)
+      mapargs = [[x, y, z] for x, y, z in xyzs]
+      selffindbincontentswrapper = functools.partial(findbincontentswrapper, self, printallbins=printallbins)
 
-    for xyz, findbincontentsresult in itertools.izip_longest(sorted(self.binsxyz, key=binsortkey), mapresult):
-      finalbincontents[xyz], printmessage[xyz], warnings[xyz] = findbincontentsresult
+      bkptemplates = self.__templates
+      self.__templates = [t.rootless for t in self.__templates]
+      mapresult = pool.map(selffindbincontentswrapper, mapargs)
+      self.__templates = bkptemplates
+
+      for xyz, findbincontentsresult in itertools.izip_longest(xyzs, mapresult):
+        finalbincontents[xyz], printmessage[xyz], warnings[xyz] = findbincontentsresult
+
+    else:
+      for xyz in xyzs:
+        finalbincontents[xyz], printmessage[xyz], warnings[xyz] = self.findbincontents(*xyz, printallbins=printallbins)
 
     for (x, y, z), bincontents in finalbincontents.iteritems():
       for t, content in itertools.izip(self.templates, bincontents):
