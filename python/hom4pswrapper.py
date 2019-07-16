@@ -1,10 +1,10 @@
-import abc, contextlib, multiprocessing, os, re, subprocess
+import abc, contextlib, itertools, multiprocessing, os, re, subprocess
 
 import numpy as np
 
 nproc = multiprocessing.cpu_count()
 
-def getcommandline(dispatch=None, engine=None, threads=None, pre=["balance", "const"], post=["pop", "pop", "refine", "summary"], mprec=None, summarydigits=None, homotopy="polyexp"):
+def getcommandline(dispatch=None, engine=None, threads=None, pre=["balance", "const"], post=["pop", "pop", "refine", "summary"], mprec=None, summarydigits=None, homotopy="polyexp", stepctrl=False):
   args = ["hom4ps-core"]
   if dispatch is not None: args.append("--dispatch="+dispatch)
   if engine is not None: args.append("--engine="+engine)
@@ -29,6 +29,8 @@ def getcommandline(dispatch=None, engine=None, threads=None, pre=["balance", "co
     "-fsummary-standard:1",
     "-fsummary-digits:{:d}".format(summarydigits),
   ]
+  if stepctrl:
+    args.append("-Mstep-ctrl")
   return args
 
 
@@ -40,6 +42,8 @@ def smallparallelcmdline():
   return getcommandline(dispatch="serial", engine="stack", summarydigits=16, threads="CPU")
 def smallparalleltdegcmdline():
   return getcommandline(dispatch="serial", engine="stack", summarydigits=16, threads="CPU", homotopy="tdeg")
+def smallparalleltdegstepctrlcmdline():
+  return getcommandline(dispatch="serial", engine="stack", summarydigits=16, threads="CPU", homotopy="tdeg", stepctrl=True)
 def smallparalleltdegnopostcmdline():
   return getcommandline(dispatch="serial", engine="stack", summarydigits=16, threads="CPU", homotopy="tdeg", post=["summary"])
 def easycmdline():
@@ -52,6 +56,7 @@ def getcmdline(which):
     "smallparallel": smallparallelcmdline,
     "smallparalleltdeg": smallparallelcmdline,
     "smallparalleltdegnopost": smallparalleltdegnopostcmdline,
+    "smallparalleltdegstepctrl": smallparalleltdegstepctrlcmdline,
     "easy": easycmdline,
   }[which]()
 
@@ -96,6 +101,13 @@ class Hom4PSResult(object):
   @property
   def realsolutions(self):
     return [solution for solution in self.solutions if np.all(np.isreal(solution))]
+  @property
+  def nduplicatesolutions(self):
+    result = 0
+    for solution1, solution2 in itertools.combinations(self.solutions, 2):
+      if np.all(np.isclose(solution1, solution2, rtol=1e-7, atol=1e-10)):
+        result += 1
+    return result
 
 class Hom4PSRuntimeError(Hom4PSResult, RuntimeError):
   @abc.abstractproperty
@@ -118,8 +130,23 @@ class Hom4PSDivergentPathsError(Hom4PSRuntimeError):
     super(Hom4PSDivergentPathsError, self).__init__(*args, **kwargs)
     assert self.ndivergentpaths != 0
 
-class Hom4PSDivergentAndFailedPathsError(Hom4PSFailedPathsError, Hom4PSDivergentPathsError):
+class Hom4PSDuplicateSolutionsError(Hom4PSRuntimeError):
+  errormessage = "hom4ps found some duplicate solutions."
+  def __init__(self, *args, **kwargs):
+    super(Hom4PSDuplicateSolutionsError, self).__init__(*args, **kwargs)
+    assert self.nduplicatesolutions != 0
+
+class Hom4PSFailedAndDivergentPathsError(Hom4PSFailedPathsError, Hom4PSDivergentPathsError):
   errormessage = "hom4ps found some divergent paths and some failed paths."
+
+class Hom4PSFailedPathsAndDuplicateSolutionsError(Hom4PSFailedPathsError, Hom4PSDuplicateSolutionsError):
+  errormessage = "hom4ps found some failed paths and some duplicate solutions."
+
+class Hom4PSDivergentPathsAndDuplicateSolutionsError(Hom4PSDivergentPathsError, Hom4PSDuplicateSolutionsError):
+  errormessage = "hom4ps found some divergent paths and some duplicate solutions."
+
+class Hom4PSFailedAndDivergentPathsAndDuplicateSolutionsError(Hom4PSFailedPathsError, Hom4PSDivergentPathsError, Hom4PSDuplicateSolutionsError):
+  errormessage = "hom4ps found some failed paths, some divergent paths, and some duplicate solutions."
 
 @contextlib.contextmanager
 def setenv(name, value):
@@ -152,13 +179,16 @@ def runhom4ps(stdin, whichcmdline, verbose=False):
   if "error" in err:
     raise Hom4PSErrorMessage(stdin, out, err)
   result = Hom4PSResult(stdin, out, err)
-  if result.nfailedpaths or result.ndivergentpaths:
+  if result.nfailedpaths or result.ndivergentpaths or result.nduplicatesolutions:
     if verbose: print out
-    if not result.nfailedpaths:
-      raise Hom4PSDivergentPathsError(stdin, out, err)
-    elif not result.ndivergentpaths:
-      raise Hom4PSFailedPathsError(stdin, out, err)
-    else:
-      raise Hom4PSDivergentAndFailedPathsError(stdin, out, err)
+    raise {
+      (False, False, True ): Hom4PSDuplicateSolutionsError,
+      (False, True,  False): Hom4PSDivergentPathsError,
+      (False, True,  True ): Hom4PSDivergentPathsAndDuplicateSolutionsError,
+      (True,  False, False): Hom4PSFailedPathsError,
+      (True,  False, True ): Hom4PSFailedPathsAndDuplicateSolutionsError,
+      (True,  True,  False): Hom4PSFailedAndDivergentPathsError,
+      (True,  True,  True ): Hom4PSFailedAndDivergentPathsAndDuplicateSolutionsError,
+    }[bool(result.nfailedpaths), bool(result.ndivergentpaths), bool(result.nduplicatesolutions)](stdin, out, err)
   if verbose: print out
   return result

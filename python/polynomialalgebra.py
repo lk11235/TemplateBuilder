@@ -324,6 +324,8 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
       result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
     except hom4pswrapper.Hom4PSFailedPathsError as e:
       errors.append(e)
+    except hom4pswrapper.Hom4PSDuplicateSolutionsError as e:
+      errors.append(e)
     except hom4pswrapper.Hom4PSDivergentPathsError as e:
       if homogenizecoeffs is None:
         for cp in boundarycriticalpoints:
@@ -611,7 +613,7 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
       kwargs["setsmallestcoefficientsto0"] = True
       return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
     if "cmdlinestotry" not in kwargs:
-      kwargs["cmdlinestotry"] = "smallparalleltdeg", "smallparallel"#, "easy"
+      kwargs["cmdlinestotry"] = "smallparalleltdeg", "smallparalleltdegstepctrl", "smallparallel"#, "easy"
       return minimizepolynomialnd_permutations(d, n, coeffs, debugprint=debugprint, permutationmode=permutationmode, **kwargs)
     raise NoCriticalPointsError("Couldn't minimize polynomial under any permutation:\n{}".format(coeffs))
 
