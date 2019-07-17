@@ -349,8 +349,8 @@ class TemplateBuilder(object):
               except KeyError:
                 raise ValueError("Trying to use "+name+" for a constraint, but didn't find this template.  (Or maybe it's used for multiple constraints.  Don't do that.)")
             nthreads = self.__nthreads
-            if 0 < maxthreads < nthreads:
-              nthreads = maxthreads
+            if 0 < config["maxthreads"] < nthreads:
+              nthreads = config["maxthreads"]
             constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates, logfile=logfile, nthreads=nthreads))
 
       for tree in alltrees:
