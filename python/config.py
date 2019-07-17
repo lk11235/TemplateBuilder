@@ -164,6 +164,7 @@ class JsonReader(JsonDictWithFormat):
   format = {
     "inputDirectory": JsonStr,
     "outputFile": JsonStr,
+    "maxthreads": JsonInt,
     "constraints": UniformJsonListOf(
       JsonDictWithThisFormat(
         "JsonConstraintConfig",
@@ -225,6 +226,7 @@ class JsonReader(JsonDictWithFormat):
   defaultvalues = {
     "constraints": [],
     "inputDirectory": os.getcwd(),
+    "maxthreads": -1,
   }
 
 class TemplateBuilder(object):
@@ -346,7 +348,10 @@ class TemplateBuilder(object):
                 constrainedtemplates.append(templatesbyname.pop(name))
               except KeyError:
                 raise ValueError("Trying to use "+name+" for a constraint, but didn't find this template.  (Or maybe it's used for multiple constraints.  Don't do that.)")
-            constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates, logfile=logfile))
+            nthreads = self.__nthreads
+            if 0 < maxthreads < nthreads:
+              nthreads = maxthreads
+            constraints.append(ConstrainedTemplates(constraintconfig["type"], constrainedtemplates, logfile=logfile, nthreads=nthreads))
 
       for tree in alltrees:
         with tree:
@@ -358,7 +363,7 @@ class TemplateBuilder(object):
             piece.lock()
 
       for constraint in sorted(constraints, key=lambda x: x.ntemplates): #do the ones with fewer templates first because they're less likely to fail, so we won't have to remake their components if the later ones fail
-        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins, binsortkey=self.__binsortkey, nthreads=self.__nthreads)
+        constraint.makefinaltemplates(printbins=self.__printbins, printallbins=self.__printallbins, binsortkey=self.__binsortkey)
 
       for template in templates:
         if not template.finalized:

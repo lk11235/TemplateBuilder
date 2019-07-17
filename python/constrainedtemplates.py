@@ -32,7 +32,7 @@ def ConstrainedTemplates(constrainttype, *args, **kwargs):
 class ConstrainedTemplatesBase(object):
   __metaclass__ = abc.ABCMeta
 
-  def __init__(self, templates, logfile=None):
+  def __init__(self, templates, logfile=None, nthreads=1):
     self.__templates = templates
     if len(templates) != self.ntemplates:
       raise ValueError("Wrong number of templates ({}) for {}, should be {}".format(len(templates), type(self).__name__, self.ntemplates))
@@ -43,6 +43,8 @@ class ConstrainedTemplatesBase(object):
     if logfile is not None:
       logger.addHandler(logging.StreamHandler(logfile))
     logger.setLevel(logging.INFO)
+
+    self.__nthreads = nthreads
 
   @property
   def templates(self): 
@@ -129,7 +131,7 @@ class ConstrainedTemplatesBase(object):
     logger = logging.getLogger(self.__loggername)
     logger.info(str(thing))
 
-  def makefinaltemplates(self, printbins, printallbins, binsortkey=lambda xyz: xyz, nthreads=1):
+  def makefinaltemplates(self, printbins, printallbins, binsortkey=lambda xyz: xyz):
     if all(_.alreadyexists for _ in self.templates):
       for template in self.templates:
         for component in template.templatecomponents:
@@ -176,8 +178,8 @@ class ConstrainedTemplatesBase(object):
 
     xyzs = sorted(self.binsxyz, key=binsortkeywithmirror)
 
-    if nthreads > 1:
-      pool = multiprocessing.Pool(processes=nthreads)
+    if self.__nthreads > 1:
+      pool = multiprocessing.Pool(processes=self.__nthreads)
       mapargs = [[x, y, z] for x, y, z in xyzs]
       selffindbincontentswrapper = functools.partial(findbincontentswrapper, self, printallbins=printallbins)
 
