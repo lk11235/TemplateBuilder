@@ -322,6 +322,8 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
   for cmdline in cmdlinestotry:
     try:
       result = hom4pswrapper.runhom4ps(stdin, whichcmdline=cmdline, verbose=verbose)
+    except hom4pswrapper.Hom4PSTimeoutError as e:
+      pass
     except hom4pswrapper.Hom4PSFailedPathsError as e:
       errors.append(e)
     except hom4pswrapper.Hom4PSDuplicateSolutionsError as e:
@@ -351,61 +353,64 @@ def findcriticalpointspolynomialnd(d, n, coeffs, verbose=False, usespecialcases=
         solutions = [solution[1:] / solution[0] for solution in solutions]
       return solutions
 
-  if verbose:
-    print "seeing if those calls gave different solutions, in case between them we have them all covered"
+  if errors:
+    if verbose:
+      print "seeing if those calls gave different solutions, in case between them we have them all covered"
 
-  solutions = []
-  allclosekwargs = {"rtol": 1e-3, "atol": 1e-08}
-  for error in errors:
-    thesesolutions = error.realsolutions
-    if homogenizecoeffs is not None:
-      thesesolutions = [solution[1:] / solution[0] for solution in thesesolutions]
+    solutions = []
+    allclosekwargs = {"rtol": 1e-3, "atol": 1e-08}
+    for error in errors:
+      thesesolutions = error.realsolutions
+      if homogenizecoeffs is not None:
+        thesesolutions = [solution[1:] / solution[0] for solution in thesesolutions]
 
-    while any(closebutnotequal(first, second, **allclosekwargs) for first, second in itertools.combinations(thesesolutions, 2)):
-      allclosekwargs["rtol"] /= 2
-      allclosekwargs["atol"] /= 2
+      while any(closebutnotequal(first, second, **allclosekwargs) for first, second in itertools.combinations(thesesolutions, 2)):
+        allclosekwargs["rtol"] /= 2
+        allclosekwargs["atol"] /= 2
 
-    for newsolution in thesesolutions:
-      if not any(closebutnotequal(newsolution, oldsolution, **allclosekwargs) for oldsolution in solutions):
-        solutions.append(newsolution)
+      for newsolution in thesesolutions:
+        if not any(closebutnotequal(newsolution, oldsolution, **allclosekwargs) for oldsolution in solutions):
+          solutions.append(newsolution)
 
-  numberofpossiblesolutions = min(len(e.solutions) + e.nfailedpaths + e.ndivergentpaths for e in errors)
+    numberofpossiblesolutions = min(len(e.solutions) + e.nfailedpaths + e.ndivergentpaths for e in errors)
 
-  if len(solutions) > numberofpossiblesolutions:
-    raise NoCriticalPointsError(coeffs, moremessage="found too many critical points in the union of the different configurations", solutions=solutions)
+    if len(solutions) > numberofpossiblesolutions:
+      raise NoCriticalPointsError(coeffs, moremessage="found too many critical points in the union of the different configurations", solutions=solutions)
 
-  if len(solutions) == numberofpossiblesolutions:
-    if verbose: print "we do"
-    if homogenizecoeffs is not None:
-      solutions = [solution[1:] / solution[0] for solution in solutions]
-    return solutions
+    if len(solutions) == numberofpossiblesolutions:
+      if verbose: print "we do"
+      if homogenizecoeffs is not None:
+        solutions = [solution[1:] / solution[0] for solution in solutions]
+      return solutions
 
-  if setsmallestcoefficientsto0:
-    newcoeffs = []
-    setto0 = []
-    biggest = max(abs(coeffs))
-    smallest = min(abs(coeffs[np.nonzero(coeffs)]))
-    for coeff in coeffs:
-      if coeff == 0 or np.log(biggest / abs(coeff)) < np.log(abs(coeff) / smallest):
-        newcoeffs.append(coeff)
+    if setsmallestcoefficientsto0:
+      newcoeffs = []
+      setto0 = []
+      biggest = max(abs(coeffs))
+      smallest = min(abs(coeffs[np.nonzero(coeffs)]))
+      for coeff in coeffs:
+        if coeff == 0 or np.log(biggest / abs(coeff)) < np.log(abs(coeff) / smallest):
+          newcoeffs.append(coeff)
+        else:
+          setto0.append(coeff)
+          newcoeffs.append(0)
+      newcoeffs = np.array(newcoeffs)
+      setto0 = np.array(setto0)
+      if np.log10(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))) > np.log10(biggest / smallest) / 3: #if there's a big gap
+        if verbose: print "trying again after setting the smallest coefficients to 0:\n{}".format(setto0)
+        newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=homogenizecoeffs, boundarycriticalpoints=boundarycriticalpoints)
+        for oldsolution in solutions:
+          if verbose: print "checking if old solution {} is still here".format(oldsolution)
+          if not any(np.allclose(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
+            if verbose: print "it's not"
+            break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
+          if verbose: print "it is"
+        else:  #removing this coefficient didn't mess up the old solutions
+          return newsolutions
       else:
-        setto0.append(coeff)
-        newcoeffs.append(0)
-    newcoeffs = np.array(newcoeffs)
-    setto0 = np.array(setto0)
-    if np.log10(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))) > np.log10(biggest / smallest) / 3: #if there's a big gap
-      if verbose: print "trying again after setting the smallest coefficients to 0:\n{}".format(setto0)
-      newsolutions = findcriticalpointspolynomialnd(d, n, newcoeffs, verbose=verbose, usespecialcases=usespecialcases, cmdlinestotry=cmdlinestotry, homogenizecoeffs=homogenizecoeffs, boundarycriticalpoints=boundarycriticalpoints)
-      for oldsolution in solutions:
-        if verbose: print "checking if old solution {} is still here".format(oldsolution)
-        if not any(np.allclose(oldsolution, newsolution, **allclosekwargs) for newsolution in newsolutions):
-          if verbose: print "it's not"
-          break  #removing this coefficient messed up one of the old solutions, so we can't trust the new ones
-        if verbose: print "it is"
-      else:  #removing this coefficient didn't mess up the old solutions
-        return newsolutions
-    else:
-      if verbose: print "can't set the smallest coefficients to 0, there's not a clear separation between big and small:\nbig candidates:{} --> range = {} - {}\nsmall candidates: {} --> range = {} - {}\n\nmore info: {} {}".format(newcoeffs[np.nonzero(newcoeffs)], min(abs(newcoeffs[np.nonzero(newcoeffs)])), max(abs(newcoeffs)), setto0, min(abs(setto0)), max(abs(setto0)), np.log10(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))), np.log10(biggest / smallest))
+        if verbose: print "can't set the smallest coefficients to 0, there's not a clear separation between big and small:\nbig candidates:{} --> range = {} - {}\nsmall candidates: {} --> range = {} - {}\n\nmore info: {} {}".format(newcoeffs[np.nonzero(newcoeffs)], min(abs(newcoeffs[np.nonzero(newcoeffs)])), max(abs(newcoeffs)), setto0, min(abs(setto0)), max(abs(setto0)), np.log10(min(abs(newcoeffs[np.nonzero(newcoeffs)])) / max(abs(setto0))), np.log10(biggest / smallest))
+  else:
+    solutions=None
 
   raise NoCriticalPointsError(coeffs, moremessage="there are failed and/or divergent paths, even after trying different configurations and saving mechanisms", solutions=solutions)
 

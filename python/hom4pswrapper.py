@@ -1,4 +1,4 @@
-import abc, contextlib, itertools, multiprocessing, os, re, subprocess
+import abc, contextlib, itertools, multiprocessing, os, re, subprocess32 as subprocess
 
 import numpy as np
 
@@ -148,6 +148,9 @@ class Hom4PSDivergentPathsAndDuplicateSolutionsError(Hom4PSDivergentPathsError, 
 class Hom4PSFailedAndDivergentPathsAndDuplicateSolutionsError(Hom4PSFailedPathsError, Hom4PSDivergentPathsError, Hom4PSDuplicateSolutionsError):
   errormessage = "hom4ps found some failed paths, some divergent paths, and some duplicate solutions."
 
+class Hom4PSTimeoutError(Hom4PSRuntimeError):
+  errormessage = "hom4ps timed out."
+
 @contextlib.contextmanager
 def setenv(name, value):
   oldvalue = os.environ.get(name, None)
@@ -170,17 +173,23 @@ def addtocpath(path):
   with setenv("CPATH", value):
     yield
 
-def runhom4ps(stdin, whichcmdline, verbose=False):
+def runhom4ps(stdin, whichcmdline, verbose=False, timeout=10):
   cmdline = getcmdline(whichcmdline)
   if verbose: print stdin
+
   with addtocpath(os.path.join(os.environ["CMSSW_BASE"], "include")):
     p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = p.communicate(stdin)
-  if "error" in err:
-    raise Hom4PSErrorMessage(stdin, out, err)
-  result = Hom4PSResult(stdin, out, err)
+    try:
+      stdout, stderr = p.communicate(stdin, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+      raise Hom4PSTimeoutError(stdin, e.stdout if e.stdout else "", e.stderr if e.stderr else "")
+
+  if "error" in stderr:
+    raise Hom4PSErrorMessage(stdin, stdout, stderr)
+  result = Hom4PSResult(stdin, stdout, stderr)
+
   if result.nfailedpaths or result.ndivergentpaths or result.nduplicatesolutions:
-    if verbose: print out
+    if verbose: print stdout
     raise {
       (False, False, True ): Hom4PSDuplicateSolutionsError,
       (False, True,  False): Hom4PSDivergentPathsError,
@@ -189,6 +198,6 @@ def runhom4ps(stdin, whichcmdline, verbose=False):
       (True,  False, True ): Hom4PSFailedPathsAndDuplicateSolutionsError,
       (True,  True,  False): Hom4PSFailedAndDivergentPathsError,
       (True,  True,  True ): Hom4PSFailedAndDivergentPathsAndDuplicateSolutionsError,
-    }[bool(result.nfailedpaths), bool(result.ndivergentpaths), bool(result.nduplicatesolutions)](stdin, out, err)
-  if verbose: print out
+    }[bool(result.nfailedpaths), bool(result.ndivergentpaths), bool(result.nduplicatesolutions)](stdin, stdout, stderr)
+  if verbose: print stdout
   return result
