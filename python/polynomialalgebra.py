@@ -590,7 +590,7 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
   signs = {1: [], -1: [], 0: []}
   for permutation in permutations_differentonesfirst(xand1):
     print permutation
-    permutationdict = {orig: new for orig, new in itertools.izip(xand1, permutation)}
+    permutationdict = {orig: new for new, orig in itertools.izip(xand1, permutation)}
     try:
       result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
     except (NoCriticalPointsError, DegeneratePolynomialError):
