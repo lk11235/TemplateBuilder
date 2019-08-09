@@ -258,9 +258,6 @@ def getboundarymonomials(d, n, coeffs):
   firstletter = getnvariableletters(n)[0]
   for coeff, ctr in getpolynomialndmonomials(d, n, coeffs):
     if ctr["1"]: continue
-    if len(set(ctr.elements())) == 1: print next(ctr.elements()), bool(coeff),
-  print
-  raw_input()
   for coeff, ctr in getpolynomialndmonomials(d, n, coeffs):
     if ctr["1"]: continue
     if len(set(ctr.elements())) == 1 and coeff == 0: raise DegeneratePolynomialError(coeffs, d, next(ctr.elements()))
@@ -589,7 +586,6 @@ def minimizepolynomialnd_permutations(d, n, coeffs, debugprint=False, permutatio
   best = None
   signs = {1: [], -1: [], 0: []}
   for permutation in permutations_differentonesfirst(xand1):
-    print permutation
     permutationdict = {orig: new for new, orig in itertools.izip(xand1, permutation)}
     try:
       result = minimizepolynomialnd_permutation(d, n, coeffs, permutationdict=permutationdict, **kwargs)
