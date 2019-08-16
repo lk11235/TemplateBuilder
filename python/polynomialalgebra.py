@@ -510,8 +510,9 @@ def minimizepolynomialnd(d, n, coeffs, verbose=False, **kwargs):
   minimum = polynomial(minimumx)
 
   linearconstraint = getpolynomialnd(d, n, np.diag([1 for _ in coeffs]))(minimumx)
-  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=2e-2):
-    raise ValueError("{} != {}??".format(np.dot(linearconstraint, coeffs), minimum))
+  if not np.isclose(np.dot(linearconstraint, coeffs), minimum, rtol=4e-2):
+    np.set_printoptions(precision=20)
+    raise ValueError("{} != {}??\n\nMore info:\n\n{}\n\n{}\n\n{}".format(np.dot(linearconstraint, coeffs), minimum, minimumx, linearconstraint, coeffs))
 
   return OptimizeResult(
     x=np.array(minimumx),
