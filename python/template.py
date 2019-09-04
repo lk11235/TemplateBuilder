@@ -143,8 +143,15 @@ class Template(TemplateBase):
     sign = {"symmetric": 1, "antisymmetric": -1}[self.mirrortype]
     for x, y, z in self.binsxyz:
       if y > self.ybins / 2: continue
-      if (self.GetBinContentError(x, y, z).n, self.GetBinContentError(x, y, z).s) != (sign*self.GetBinContentError(x, self.ybins+1-y, z).n, self.GetBinContentError(x, self.ybins+1-y, z).s):
-        raise RuntimeError("Mirror didn't happen: ({}, {}, {}) {} {}".format(x, y, z, self.GetBinContentError(x, y, z), self.GetBinContentError(x, self.ybins+1-y, z)))
+      othery = self.ybins+1-y
+      if (
+        self.GetBinContentError(x, y, z).n == sign*self.GetBinContentError(x, othery, z).n
+        and self.GetBinContentError(x, y, z).s != self.GetBinContentError(x, othery, z).s
+        and np.isclose(self.GetBinContentError(x, y, z).s, self.GetBinContentError(x, othery, z).s, atol=0, rtol=1e-15)
+      ):
+        self.SetBinContentError(x, othery, z, self.GetBinContentError(x, y, z))
+      if (self.GetBinContentError(x, y, z).n, self.GetBinContentError(x, y, z).s) != (sign*self.GetBinContentError(x, othery, z).n, self.GetBinContentError(x, othery, z).s):
+        raise RuntimeError("Mirror didn't happen: ({}, {}, {}) {!r} {!r}".format(x, y, z, self.GetBinContentError(x, y, z), self.GetBinContentError(x, othery, z)))
 
   def dofloor(self):
     if self.__didfloor: raise RuntimeError("Trying to floor twice!")
@@ -178,8 +185,8 @@ class Template(TemplateBase):
       assert self.__didcheckmirror
     self.doscale()
     self.dofloor()
-    self.__finalized = True
     self.checkmirror()
+    self.__finalized = True
     self.__h.SetDirectory(self.__tdirectory)
 
   @property
