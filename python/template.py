@@ -2,6 +2,7 @@ import abc, array, itertools, os
 
 from collections import Counter
 
+import numpy as np
 import uncertainties
 
 from moremath import weightedaverage
