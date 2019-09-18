@@ -63,6 +63,8 @@ class Tree(object):
   ):
     import ROOT
 
+    ROOT.v5.TFormula.SetMaxima(2000)
+
     for formula in xformula, yformula, zformula, weightformula, cutformula:
       for branch in re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]+\b", formula):
         self.__t.SetBranchStatus(branch, 1)

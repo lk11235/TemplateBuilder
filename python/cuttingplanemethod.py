@@ -398,7 +398,7 @@ class CuttingPlaneMethodMultiDimensionalSimple(CuttingPlaneMethodMultiDimensiona
 class CuttingPlaneMethod_InsertZeroAtIndices(CuttingPlaneMethodMultiDimensionalSimple):
   def evalconstraint(self, coeffs, **kwargs):
     coeffs = iter(coeffs)
-    newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(70)])
+    newcoeffs = np.array([0 if i in self.insertzeroatindices else next(coeffs) for i in xrange(super(CuttingPlaneMethod_InsertZeroAtIndices, self).xsize)])
     for remaining in coeffs: assert False
     return self.minimizepolynomialfunction(self.degree, self.nvariables, newcoeffs, **kwargs)
 
@@ -436,6 +436,10 @@ class CuttingPlaneMethod_InsertZeroAtIndices(CuttingPlaneMethodMultiDimensionalS
     return result
   expectedxsize = None
 
+class CuttingPlaneMethod2DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
+  degree = 2
+  nvariables = 2
+
 class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
   degree = 2
   nvariables = 3
@@ -443,6 +447,10 @@ class CuttingPlaneMethod3DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
 class CuttingPlaneMethod4DQuadratic(CuttingPlaneMethodMultiDimensionalSimple):
   degree = 2
   nvariables = 4
+
+class CuttingPlaneMethod3DQuartic(CuttingPlaneMethodMultiDimensionalSimple):
+  degree = 4
+  nvariables = 3
 
 class CuttingPlaneMethod4DQuartic(CuttingPlaneMethodMultiDimensionalSimple):
   degree = 4
@@ -475,6 +483,16 @@ class CuttingPlaneMethod4DQuartic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZ
   insertzeroatindices = list(insertzeroatindices())
   variableswithnoquarticterm = ()
 
+class CuttingPlaneMethod3DQuartic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod3DQuartic):
+  expectedxsize = 22
+  def insertzeroatindices():
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 3)):
+      assert set(variables) <= set("1xyz")
+      if variables["x"] in (1, 3):
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = ()
+
 class CuttingPlaneMethod4DQuartic_4thVariableQuadratic_1stVariableOnlyEven(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
   expectedxsize = 42
   def insertzeroatindices():
@@ -497,8 +515,14 @@ def cuttingplanemethod1dquadratic(*args, **kwargs):
   return CuttingPlaneMethod1DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod1dquartic(*args, **kwargs):
   return CuttingPlaneMethod1DQuartic(*args, **kwargs).run()
+def cuttingplanemethod2dquadratic(*args, **kwargs):
+  return CuttingPlaneMethod2DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod3dquadratic(*args, **kwargs):
   return CuttingPlaneMethod3DQuadratic(*args, **kwargs).run()
+def cuttingplanemethod3dquartic(*args, **kwargs):
+  return CuttingPlaneMethod3DQuartic(*args, **kwargs).run()
+def cuttingplanemethod3dquartic_1stvariableonlyeven(*args, **kwargs):
+  return CuttingPlaneMethod3DQuartic_1stVariableOnlyEven(*args, **kwargs).run()
 def cuttingplanemethod4dquadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic(*args, **kwargs):

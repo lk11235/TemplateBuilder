@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 from uncertainties import nominal_value, std_dev, ufloat
 
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerocubic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerocubic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod2dquadratic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod3dquartic, cuttingplanemethod3dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerocubic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerocubic
 from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
 from polynomialalgebra import NoCriticalPointsError
@@ -21,7 +21,10 @@ def ConstrainedTemplates(constrainttype, *args, **kwargs):
     "unconstrained": OneTemplate,
     "oneparameterHVV": OneParameterHVV,
     "oneparameterVVHVV": OneParameterVVHVV,
+    "twoparameterHVV": TwoParameterHVV,
     "threeparameterHVV": ThreeParameterHVV,
+    "threeparameterVVHVV": ThreeParameterVVHVV,
+    "threeparameterVVHVV_nog4int": ThreeParameterVVHVV_nog4int,
     "fourparameterHVV": FourParameterHVV,
     "fourparameterVVHVV": FourParameterVVHVV,
     "fourparameterWWHVV": FourParameterWWHVV,
@@ -532,6 +535,17 @@ class OneParameterVVHVV(ConstrainedTemplatesWithFit):
   cuttingplanefunction = staticmethod(cuttingplanemethod1dquartic)
   cuttingplanehaspermutations = False
 
+class TwoParameterHVV(ConstrainedTemplatesWithFit):
+  templatenames = (
+    "SM", "g11gi1", "g11gj1",
+    "i",  "gi1gj1",
+    "j",
+  )
+  pureindices = 0, 3, 5
+  cuttingplanefunction = staticmethod(cuttingplanemethod2dquadratic)
+  cuttingplanehaspermutations = True
+  defaultmaxiter = 2000
+
 class ThreeParameterHVV(ConstrainedTemplatesWithFit):
   templatenames = (
     "SM", "g11gj1", "g11gk1", "g11gl1",
@@ -637,6 +651,45 @@ class FourParameterVVHVV(ConstrainedTemplatesWithFit):
   gZ34indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _ or _ == "l")
   cuttingplanehaspermutations = True
 
+class ThreeParameterVVHVV(ConstrainedTemplatesWithFit):
+  templatenames = (
+    "SM",
+    "g13gi1", "g13gj1",    "g13gk1",
+
+    "g12gi2", "g12gi1gj1", "g12gi1gk1",
+              "g12gj2",    "g12gj1gk1",
+                           "g12gk2",
+
+    "g11gi3", "g11gi2gj1", "g11gi2gk1",
+              "g11gi1gj2", "g11gi1gj1gk1",
+                           "g11gi1gk2",
+              "g11gj3",    "g11gj2gk1",
+                           "g11gj1gk2",
+                           "g11gk3",
+
+    "i",
+              "gi3gj1",    "gi3gk1",
+
+              "gi2gj2",    "gi2gj1gk1",
+                           "gi2gk2",
+
+              "gi1gj3",    "gi1gj2gk1",
+                           "gi1gj1gk2",
+                           "gi1gk3",
+
+    "j",
+                           "gj3gk1",
+
+                           "gj2gk2",
+
+                           "gj1gk3",
+
+    "k",
+  )
+  pureindices = 0, 20, 30, 34
+  cuttingplanefunction = staticmethod(cuttingplanemethod3dquartic)
+  cuttingplanehaspermutations = True
+
 class FourParameterWWHVV(ConstrainedTemplatesWithFit):
   #https://stackoverflow.com/q/13905741/5228524
   templatenames = tuple(name for i, name in enumerate(FourParameterVVHVV.templatenames) if i not in FourParameterVVHVV.gZ34indices)
@@ -646,6 +699,15 @@ class FourParameterWWHVV(ConstrainedTemplatesWithFit):
     if index not in FourParameterVVHVV.gZ34indices
   )
   cuttingplanefunction = staticmethod(cuttingplanemethod4dquartic_4thvariablequadratic)
+  cuttingplanehaspermutations = True
+
+class ThreeParameterVVHVV_nog4int(ConstrainedTemplatesWithFit):
+  templatenames = tuple(name for name in ThreeParameterVVHVV.templatenames if "gi1" not in name and "gi3" not in name)
+  pureindices = tuple(
+    index - sum(1 for i, name in enumerate(ThreeParameterVVHVV.templatenames) if i < index and ("gi1" in name or "gi3" in name))
+    for index in ThreeParameterVVHVV.pureindices
+  )
+  cuttingplanefunction = staticmethod(cuttingplanemethod3dquartic_1stvariableonlyeven)
   cuttingplanehaspermutations = True
 
 class FourParameterVVHVV_nog4int(ConstrainedTemplatesWithFit):
