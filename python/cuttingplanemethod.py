@@ -630,6 +630,24 @@ class CuttingPlaneMethod4DQuartic_4thVariableSmallBeyondQuadratic_1stVariableOnl
       return multiplyothercoeffs * othercoeffs
     return modifyothercoeffs,
 
+def cuttingplanemethod4dquartic_variableszerobeyondquadratic(x0, sigma, *args, **kwargs):
+  wxyz34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["w"] + monomial["x"] + monomial["y"] + monomial["z"] >= 3]
+
+  assert np.all(x0[wxyz34indices] == 0)
+
+  x0withoutwxyz34 = np.array([_ for i, _ in enumerate(x0) if i not in wxyz34indices])
+  sigmawithoutwxyz34 = np.array([_ for i, _ in enumerate(sigma) if i not in wxyz34indices])
+
+  result = cuttingplanemethod4dquadratic(x0withoutwxyz34, sigmawithoutwxyz34, *args, **kwargs)
+
+  x = iter(result.x)
+  result.x = np.array([0 if i in wxyz34indices else next(x) for i in xrange(len(x0))])
+  for remaining in x: assert False
+
+  result.message += " (variables are only quadratic)"
+
+  return result
+
 def cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs):
   z34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["z"] >= 3]
 

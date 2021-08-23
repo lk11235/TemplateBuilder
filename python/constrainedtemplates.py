@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 from uncertainties import nominal_value, std_dev, ufloat
 
-from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod2dquadratic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod3dquartic, cuttingplanemethod3dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerocubic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerocubic
+from cuttingplanemethod import cuttingplanemethod1dquadratic, cuttingplanemethod1dquartic, cuttingplanemethod2dquadratic, cuttingplanemethod3dquadratic, cuttingplanemethod4dquadratic, cuttingplanemethod3dquartic, cuttingplanemethod3dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic, cuttingplanemethod4dquartic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablezerocubic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablequadratic, cuttingplanemethod4dquartic_4thvariablequadratic_1stvariableonlyeven, cuttingplanemethod4dquartic_4thvariablesmallbeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic, cuttingplanemethod4dquartic_4thvariablezerocubic, cuttingplanemethod4dquartic_variableszerobeyondquadratic
 from moremath import kspoissongaussian, weightedaverage
 from optimizeresult import OptimizeResult
 from polynomialalgebra import NoCriticalPointsError
@@ -628,7 +628,10 @@ class FourParameterVVHVV(ConstrainedTemplatesWithFit):
   )
   pureindices = 0, 35, 55, 65, 69
   def cuttingplanefunction(self, x0, sigma, *args, **kwargs):
-    if np.all(x0[self.gZ34indices,] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
+    if np.all(x0[self.gWXYZ34indices,] == 0): #this happens for VBF in the photon analysis when there are no reweighted ZZ fusion events in the bin
+      return cuttingplanemethod4dquartic_variableszerobeyondquadratic(x0, sigma, *args, **kwargs)
+
+    elif np.all(x0[self.gZ34indices,] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin
       return cuttingplanemethod4dquartic_4thvariablezerobeyondquadratic(x0, sigma, *args, **kwargs)
 
     elif np.all(x0[self.gZ3indices,] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin but there are events in the L1Zg sample
@@ -649,6 +652,7 @@ class FourParameterVVHVV(ConstrainedTemplatesWithFit):
       return cuttingplanemethod4dquartic(x0, sigma, *args, **kwargs)
   gZ3indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _)
   gZ34indices = tuple(i for i, _ in enumerate(templatenames) if "gl3" in _ or _ == "l")
+  gWXYZ34indices = tuple(i for i, _ in enumerate(templatenames) if "g12" not in _ and "g13" not in _ and _ != "SM")
   cuttingplanehaspermutations = True
 
 class ThreeParameterVVHVV(ConstrainedTemplatesWithFit):
