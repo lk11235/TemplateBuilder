@@ -465,6 +465,15 @@ class CuttingPlaneMethod4DQuartic_4thVariableQuadratic(CuttingPlaneMethod_Insert
   insertzeroatindices = list(insertzeroatindices())
   variableswithnoquarticterm = "z",
 
+class CuttingPlaneMethod4DQuartic_3rd4thVariablesQuadratic(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
+  expectedxsize = 53
+  def insertzeroatindices():
+    for idx, variables in enumerate(getpolynomialndmonomials(4, 4)):
+      if variables["y"] + variables["z"] >= 3:
+        yield idx
+  insertzeroatindices = list(insertzeroatindices())
+  variableswithnoquarticterm = "y", "z"
+
 class CuttingPlaneMethod4DQuartic_4thVariableNoCubic(CuttingPlaneMethod_InsertZeroAtIndices, CuttingPlaneMethod4DQuartic):
   expectedxsize = 66
   def insertzeroatindices():
@@ -527,6 +536,8 @@ def cuttingplanemethod4dquadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic(*args, **kwargs).run()
+def cuttingplanemethod4dquartic_3rd4thvariablesquadratic(*args, **kwargs):
+  return CuttingPlaneMethod4DQuartic_3rd4thVariablesQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_4thvariablequadratic(*args, **kwargs):
   return CuttingPlaneMethod4DQuartic_4thVariableQuadratic(*args, **kwargs).run()
 def cuttingplanemethod4dquartic_4thvariablenocubic(*args, **kwargs):
@@ -645,6 +656,24 @@ def cuttingplanemethod4dquartic_variableszerobeyondquadratic(x0, sigma, *args, *
   for remaining in x: assert False
 
   result.message += " (variables are only quadratic)"
+
+  return result
+
+def cuttingplanemethod4dquartic_3rd4thvariableszerobeyondquadratic(x0, sigma, *args, **kwargs):
+  yz34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["y"]+monomial["z"] >= 3]
+
+  assert np.all(x0[yz34indices] == 0)
+
+  x0withoutyz34 = np.array([_ for i, _ in enumerate(x0) if i not in yz34indices])
+  sigmawithoutyz34 = np.array([_ for i, _ in enumerate(sigma) if i not in yz34indices])
+
+  result = cuttingplanemethod4dquartic_3rd4thvariablesquadratic(x0withoutyz34, sigmawithoutyz34, *args, **kwargs)
+
+  x = iter(result.x)
+  result.x = np.array([0 if i in yz34indices else next(x) for i in xrange(len(x0))])
+  for remaining in x: assert False
+
+  result.message += " (4th variable is only quadratic)"
 
   return result
 
