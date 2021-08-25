@@ -631,7 +631,7 @@ class FourParameterVVHVV(ConstrainedTemplatesWithFit):
     if np.all(x0[self.gWXYZ34indices,] == 0): #this happens for VBF in the photon analysis when there are no reweighted ZZ fusion events in the bin
       return cuttingplanemethod4dquartic_variableszerobeyondquadratic(x0, sigma, *args, **kwargs)
 
-    elif np.all(x0[self.gYZ34indices,] == 0): #this happens for VH when the only ZH events in the bin have a high Z mass
+    elif np.all(abs(x0[self.gYZ34indices,]) <= 1e-16): #this happens for VH when the only ZH events in the bin have a high Z mass
       return cuttingplanemethod4dquartic_3rd4thvariableszerobeyondquadratic(x0, sigma, *args, **kwargs)
 
     elif np.all(x0[self.gZ34indices,] == 0): #this happens for VBF when there are no reweighted ZZ fusion events in the bin

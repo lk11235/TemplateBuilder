@@ -662,7 +662,7 @@ def cuttingplanemethod4dquartic_variableszerobeyondquadratic(x0, sigma, *args, *
 def cuttingplanemethod4dquartic_3rd4thvariableszerobeyondquadratic(x0, sigma, *args, **kwargs):
   yz34indices = [i for i, monomial in enumerate(getpolynomialndmonomials(4, 4)) if monomial["y"]+monomial["z"] >= 3]
 
-  assert np.all(x0[yz34indices] == 0)
+  assert np.all(abs(x0[yz34indices]) <= 1e-16)
 
   x0withoutyz34 = np.array([_ for i, _ in enumerate(x0) if i not in yz34indices])
   sigmawithoutyz34 = np.array([_ for i, _ in enumerate(sigma) if i not in yz34indices])
