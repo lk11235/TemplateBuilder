@@ -331,15 +331,16 @@ class ConstrainedTemplatesBase(object):
       for othername in bincontent:
         #look at the other names that have bigger errors but comparable relative errors
         if bincontentabs[othername].s <= bincontentabs[name].s: continue
-        if bincontentabs[name].s == 0: continue
+        if bincontentabs[othername].s == 0: continue
         if debugprint: print("here with", othername)
-        if relativeerror[othername] <= relativeerror[name] * (
+        if bincontentabs[name] == 0 or relativeerror[othername] <= relativeerror[name] * (
           (1 + 1.5 * np.log10(bincontentabs[othername].s / bincontentabs[name].s) * kspoissongaussian(1/relativeerror[name]**2))
         ):
           if debugprint: print("here 2 with", othername)
           if errortoset is None: errortoset = 0
           errortoset = max(errortoset, bincontentabs[othername].s)
       if errortoset is not None:
+        if debugprint: print("errortoset =", errortoset)
         outliers[name] = ufloat(bincontent[name].n, errortoset)
 
     return outliers
@@ -509,11 +510,12 @@ class ConstrainedTemplatesWithFit(ConstrainedTemplatesBase):
   def isbinsmall(self, x, y, z):
     for index in self.pureindices:
       bincontent = sum(
-        weightedaverage(templatecomponentbincontent.itervalues())
+        weightedaverage(v for v in templatecomponentbincontent.itervalues() if v.n or v.s)
         for templatecomponentbincontent in self.getcomponentbincontents(x, y, z)[index]
+        if any(v.n or v.s for v in templatecomponentbincontent.itervalues())
       )
       integral = sum(
-        weightedaverage(templatecomponentsumofallweights.itervalues())
+        weightedaverage(v for v in templatecomponentsumofallweights.itervalues())
         for templatecomponentsumofallweights in self.getcomponentsumsofallweights()[index]
       )
       if bincontent > integral / 50000:
