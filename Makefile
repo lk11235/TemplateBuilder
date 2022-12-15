@@ -31,18 +31,18 @@ SRCPP = main.cpp\
 OBJCPP = $(patsubst %.cpp,obj/%.o,$(SRCPP))
 
 
-all : buildTemplate.exe
+all : smoothHist.exe
 
 obj/%.o : %.cpp
 	@echo ">> compiling $*"
 	@mkdir -p obj/
 	@$(CC) -c $< $(UCFLAGS) $(RUCFLAGS) -o $@
 
-buildTemplate.exe : $(OBJCPP) 
+smoothHist.exe : $(OBJCPP) 
 	@echo ">> linking..."
 	@$(CC) $^ $(ACLIBS) $(LIBS) $(GLIBS)  -o $@
 
 clean:
 	@echo ">> cleaning objects and executable"
 	@rm  -f obj/*.o
-	@rm -f buildTemplate.exe
+	@rm -f smoothHist.exe

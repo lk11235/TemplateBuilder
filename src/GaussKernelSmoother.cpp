@@ -30,7 +30,6 @@
 
 using namespace std;
 
-
 /*****************************************************************/
 GaussKernelSmoother::GaussKernelSmoother():
     m_ndim(2),
@@ -62,6 +61,8 @@ GaussKernelSmoother::~GaussKernelSmoother()
 TH1* GaussKernelSmoother::smooth(const TH1* histo)
 /*****************************************************************/
 {
+    extern vector<TH1*> m_widths;
+
     if(m_ndim!=2 && m_ndim!=3)
     {
         stringstream error;
@@ -140,6 +141,8 @@ TH1* GaussKernelSmoother::smooth(const TH1* histo)
                     point.push_back(x0);
                     point.push_back(y0);
                     point.push_back(z0);
+                    //cout<<"Bin "<<bx<<","<<by<<","<<bz<<": Point "<<x0<<","<<y0<<","<<z0<<"\n";
+                    //cout<<"m_widths "<<m_widths[0]<<","<<m_widths[1]<<","<<m_widths[2]<<"\n";
                     pair<double,double> valueError = smoothedValueError(histo, point);
                     //cout<<"Bin "<<bx<<","<<by<<","<<bz<<": smoothed = "<<valueError.first<<"\n";
                     smoothedHisto3F->SetBinContent(bx, by, bz, valueError.first);
@@ -152,6 +155,7 @@ TH1* GaussKernelSmoother::smooth(const TH1* histo)
     cout << "[INFO]   "<< setw(3) << 100 << "% [";
     for (int x=0; x<50; x++) cout << "=";
     cout << "]" << endl;
+    cout << smoothedHisto->Integral() << endl;
     return smoothedHisto;
 }
 
@@ -213,6 +217,8 @@ double GaussKernelSmoother::weight(const std::vector<double>& x0, const std::vec
 double GaussKernelSmoother::weight(const std::vector<double>& x0, double dx, int axis)
 /*****************************************************************/
 {
+    extern vector<TH1*> m_widths;
+
     // 1-dimension weight (can be factorized to obtain N-dimension weights)
     double width = 1.;
     if(m_ndim==2)
@@ -374,6 +380,8 @@ pair<double,double> GaussKernelSmoother::smoothed2DValueError(const TH1* histo, 
 pair<double,double> GaussKernelSmoother::smoothed3DValueError(const TH1* histo, const std::vector<double>& x0)
 /*****************************************************************/
 {
+    extern vector<TH1*> m_widths;
+
     int nbinsx = histo->GetNbinsX();
     int nbinsy = histo->GetNbinsY();
     int nbinsz = histo->GetNbinsZ();
@@ -529,7 +537,7 @@ pair<double,double> GaussKernelSmoother::smoothed3DValueError(const TH1* histo, 
     }
     else
     {
-        //cout<<"sumofweights=0\n";
+    //    cout<<"sumofweights=0\n";
     }
 
     return make_pair(value,error);

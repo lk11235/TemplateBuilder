@@ -3,7 +3,7 @@
 <flags CPPFLAGS="-I$(CMSSW_BASE)/src/TemplateBuilder/TemplateBuilder/include/ -I$(CMSSW_BASE)/src/TemplateBuilder/TemplateBuilder/include/external/" />
 
 
-<bin file="main.cpp" name="buildTemplate.exe">
+<bin file="main.cpp" name="smoothHist.exe">
   <use name="root"/>
   <use name="rootmath"/>
   <use name="rootgraphics"/>
